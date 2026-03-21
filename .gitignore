@@ -1,0 +1,11 @@
+work_timer/build/
+work_timer/.dart_tool/
+work_timer/.flutter-plugins
+work_timer/.flutter-plugins-dependencies
+work_timer/android/.gradle/
+work_timer/android/local.properties
+work_timer/android/key.properties
+work_timer/android/upload-keystore.jks
+work_timer/ios/Pods/
+work_timer/ios/.symlinks/
+*.ipa
