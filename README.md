@@ -6,8 +6,8 @@ A work session timer for iOS and Android. Set your work hours, and Sift handles 
 
 | Platform | Download |
 |---|---|
-| iOS (.ipa) | [Latest Release](https://github.com/utsapoddar/work-timer-altstore/releases/latest) → `work_timer.ipa` |
-| Android (.apk) | [Latest Release](https://github.com/utsapoddar/work-timer-altstore/releases/latest) → `app-release.apk` |
+| iOS (.ipa) | [Download work_timer.ipa](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/work_timer.ipa) |
+| Android (.apk) | [Download app-release.apk](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/app-release.apk) |
 
 ---
 
