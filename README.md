@@ -58,6 +58,17 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 ---
 
+## macOS Installation
+
+1. Download `Sift-macOS.zip` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
+2. Unzip the file — you'll get `work_timer.app`
+3. Drag it to your **Applications** folder
+4. On first launch, macOS may say the app can't be opened because it's from an unidentified developer
+5. Go to **System Settings → Privacy & Security** → scroll down and click **Open Anyway**
+6. Click **Open** on the confirmation prompt
+
+---
+
 ## Features
 
 - Set a custom work start time and session length
