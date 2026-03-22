@@ -12,6 +12,16 @@ String? customRingtonePath;
 Future<void> playAlarm() async {
   try {
     await _player.stop();
+    if (Platform.isAndroid) {
+      await _player.setAudioContext(const AudioContext(
+        android: AudioContextAndroid(
+          usageType: AndroidAudioUsage.alarm,
+          audioFocus: AndroidAudioFocus.gainTransientExclusive,
+          isSpeakerphoneOn: false,
+          stayAwake: false,
+        ),
+      ));
+    }
     final custom = customRingtonePath;
     if (custom != null && custom.isNotEmpty && File(custom).existsSync()) {
       await _player.play(DeviceFileSource(custom));

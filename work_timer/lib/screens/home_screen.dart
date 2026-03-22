@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +10,7 @@ import '../services/schedule.dart';
 import '../services/notifications.dart';
 import '../services/audio.dart';
 import '../services/milestones.dart';
+import '../services/live_activity.dart';
 import 'milestone_screen.dart';
 
 const _accent = Color(0xFFF97316);
@@ -27,7 +28,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _totalMinutes = 9 * 60;
   Schedule? _schedule;
   Timer? _ticker;
@@ -43,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen>
   int _lastPhaseIndex = -1;
   String? _ringtonePath;
   StreamSubscription<void>? _alarmCompleteSub;
+  StreamSubscription<String>? _notifActionSub;
   late final AnimationController _pulseCtrl;
   int _totalSessions = 0;
   int _streakDays = 0;
@@ -56,11 +58,34 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2800),
     )..repeat(reverse: true);
     _loadPrefs();
+    if (Platform.isIOS || Platform.isAndroid) {
+      final timerActionCh = MethodChannel('com.sift.timer_action');
+      timerActionCh.setMethodCallHandler((call) async {
+        if (!mounted) return;
+        if (call.method == 'onTimerAction') {
+          final action = call.arguments as String? ?? '';
+          if (action == 'stop') {
+            _stop();
+          } else if (action == 'silence') {
+            _stopAlarm();
+          }
+        }
+      });
+    }
+    _notifActionSub = onNotificationAction.listen((action) {
+      if (!mounted) return;
+      if (action == 'stop') {
+        _stop();
+      } else if (action == 'silence') {
+        _stopAlarm();
+      }
+    });
     _alarmCompleteSub = onAlarmComplete.listen((_) {
       if (!mounted) return;
       if (_sessionComplete) {
@@ -73,10 +98,21 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     _alarmCompleteSub?.cancel();
+    _notifActionSub?.cancel();
     _ticker?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _running && !_paused) {
+      _tick();
+      _ticker?.cancel();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    }
   }
 
   // ═══════════════════════════════ LOGIC (unchanged) ═══════════════════════════════
@@ -162,17 +198,19 @@ class _HomeScreenState extends State<HomeScreen>
                   label: 'Browse…',
                   onTap: () async {
                     Navigator.pop(ctx);
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.audio,
-                      allowMultiple: false,
-                    );
-                    if (result != null &&
-                        result.files.single.path != null) {
-                      final picked = File(result.files.single.path!);
-                      final dir = await getApplicationDocumentsDirectory();
-                      final dest = File('${dir.path}/custom_ringtone${result.files.single.extension != null ? '.${result.files.single.extension}' : ''}');
-                      await picked.copy(dest.path);
-                      await _saveRingtone(dest.path);
+                    await Future.delayed(const Duration(milliseconds: 300));
+                    String? pickedPath;
+                    if (Platform.isIOS) {
+                      pickedPath = await pickAudioFile();
+                    } else {
+                      final result = await FilePicker.platform.pickFiles(
+                        type: FileType.audio,
+                        allowMultiple: false,
+                      );
+                      pickedPath = result?.files.single.path;
+                    }
+                    if (pickedPath != null) {
+                      await _saveRingtone(pickedPath);
                       if (mounted) await playAlarm();
                     }
                   },
@@ -261,6 +299,20 @@ class _HomeScreenState extends State<HomeScreen>
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
+    unawaited(startTimerAudio());
+    unawaited(startTimerService());
+    final phase = schedule.phases.first;
+    final laErr = await startLiveActivity(
+      phaseName: phase.phase.name,
+      phaseEndTime: phase.endTime,
+      remainingSeconds: phase.endTime.difference(now).inSeconds,
+      totalSeconds: phase.phase.duration.inSeconds,
+      isBreak: phase.phase.isBreak,
+    );
+    if (laErr != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Live Activity: $laErr'), duration: const Duration(seconds: 6)));
+    }
   }
 
   Future<void> _triggerAlarm() async {
@@ -287,6 +339,9 @@ class _HomeScreenState extends State<HomeScreen>
     _ticker = null;
     await cancelAll();
     await stopAlarm();
+    await stopTimerAudio();
+    await stopTimerService();
+    await endLiveActivity();
     setState(() {
       _schedule = null;
       _running = false;
@@ -328,6 +383,19 @@ class _HomeScreenState extends State<HomeScreen>
       _paused = true;
       _pauseStart = DateTime.now();
     });
+    final schedule = _schedule;
+    if (schedule != null && _phaseIndex < schedule.phases.length) {
+      final phase = schedule.phases[_phaseIndex];
+      updateLiveActivity(
+        phaseName: phase.phase.name,
+        phaseEndTime: phase.endTime,
+        remainingSeconds: _remaining.inSeconds,
+        totalSeconds: phase.phase.duration.inSeconds,
+        isBreak: phase.phase.isBreak,
+        isPaused: true,
+        alarmPlaying: _alarmPlaying,
+      );
+    }
   }
 
   void _resumeSession() {
@@ -343,6 +411,18 @@ class _HomeScreenState extends State<HomeScreen>
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
+    if (schedule != null && _phaseIndex < schedule.phases.length) {
+      final phase = schedule.phases[_phaseIndex];
+      updateLiveActivity(
+        phaseName: phase.phase.name,
+        phaseEndTime: phase.endTime,
+        remainingSeconds: _remaining.inSeconds,
+        totalSeconds: phase.phase.duration.inSeconds,
+        isBreak: phase.phase.isBreak,
+        isPaused: false,
+        alarmPlaying: _alarmPlaying,
+      );
+    }
   }
 
   void _tick() {
@@ -369,6 +449,15 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (idx != _lastPhaseIndex && _lastPhaseIndex != -1) {
       _triggerAlarm();
+      updateLiveActivity(
+        phaseName: phase.phase.name,
+        phaseEndTime: phase.endTime,
+        remainingSeconds: remaining.inSeconds,
+        totalSeconds: phase.phase.duration.inSeconds,
+        isBreak: phase.phase.isBreak,
+        isPaused: false,
+        alarmPlaying: _alarmPlaying,
+      );
     }
     _lastPhaseIndex = idx;
 

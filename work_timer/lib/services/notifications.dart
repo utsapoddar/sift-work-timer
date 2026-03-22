@@ -1,12 +1,32 @@
+import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'schedule.dart';
 
 final _plugin = FlutterLocalNotificationsPlugin();
 
+final _notifActionController = StreamController<String>.broadcast();
+
+/// Emits action IDs ('stop' or 'silence') when user taps a notification action button.
+Stream<String> get onNotificationAction => _notifActionController.stream;
+
 Future<void> initNotifications() async {
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const darwinSettings = DarwinInitializationSettings(
+  const macosSettings = DarwinInitializationSettings(
+    requestAlertPermission: true,
+    requestBadgePermission: true,
+    requestSoundPermission: true,
+    notificationCategories: [
+      DarwinNotificationCategory(
+        'timer_alert',
+        actions: [
+          DarwinNotificationAction.plain('stop', 'Stop'),
+          DarwinNotificationAction.plain('silence', 'Silence'),
+        ],
+      ),
+    ],
+  );
+  const iosSettings = DarwinInitializationSettings(
     requestAlertPermission: true,
     requestBadgePermission: true,
     requestSoundPermission: true,
@@ -18,10 +38,16 @@ Future<void> initNotifications() async {
   await _plugin.initialize(
     const InitializationSettings(
       android: androidSettings,
-      iOS: darwinSettings,
-      macOS: darwinSettings,
+      iOS: iosSettings,
+      macOS: macosSettings,
       linux: linuxSettings,
     ),
+    onDidReceiveNotificationResponse: (response) {
+      final actionId = response.actionId;
+      if (actionId != null && actionId.isNotEmpty) {
+        _notifActionController.add(actionId);
+      }
+    },
   );
 }
 
@@ -111,6 +137,7 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          categoryIdentifier: 'timer_alert',
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
