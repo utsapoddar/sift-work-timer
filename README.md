@@ -6,7 +6,7 @@ A work session timer for iOS, Android, macOS, and Windows. Set your work hours, 
 
 | Platform | Download |
 |---|---|
-| iOS (.ipa) | [Download work_timer.ipa](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/work_timer.ipa) |
+| iOS (.ipa) | [Download Sift.ipa](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift.ipa) |
 | Android (.apk) | [Download app-release.apk](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/app-release.apk) |
 | macOS | [Download Sift-macOS.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-macOS.zip) |
 | Windows | [Download Sift-Windows.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-Windows.zip) |
@@ -62,7 +62,7 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 ## macOS Installation
 
 1. Download `Sift-macOS.zip` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
-2. Unzip the file — you'll get `work_timer.app`
+2. Unzip the file — you'll get `Sift.app`
 3. Drag it to your **Applications** folder
 4. On first launch, macOS may say the app can't be opened because it's from an unidentified developer
 5. Go to **System Settings → Privacy & Security** → scroll down and click **Open Anyway**
@@ -74,10 +74,10 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 1. Download `Sift-Windows.zip` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
 2. Unzip the file to a folder of your choice (e.g. `C:\Program Files\Sift`)
-3. Run `work_timer.exe` inside the unzipped folder
+3. Run `Sift.exe` inside the unzipped folder
 4. Windows may show a SmartScreen warning — click **More info → Run anyway**
 
-> The app is portable — no installer needed. You can pin `work_timer.exe` to your taskbar for quick access.
+> The app is portable — no installer needed. You can pin `Sift.exe` to your taskbar for quick access.
 
 ---
 

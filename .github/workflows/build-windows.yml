@@ -23,6 +23,7 @@ jobs:
 
       - name: Zip release
         run: |
+          Rename-Item work_timer\build\windows\x64\runner\Release\work_timer.exe Sift.exe
           Compress-Archive -Path work_timer\build\windows\x64\runner\Release\* -DestinationPath Sift-Windows.zip
 
       - name: Upload to release
