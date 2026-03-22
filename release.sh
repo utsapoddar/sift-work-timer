@@ -4,7 +4,7 @@ set -e
 REPO_ROOT="/Users/utsapoddar/work-timer"
 FLUTTER_PROJECT="$REPO_ROOT/work_timer"
 ALTSTORE_REPO="$REPO_ROOT"
-IPA_PATH="$FLUTTER_PROJECT/work_timer.ipa"
+IPA_PATH="$FLUTTER_PROJECT/Sift.ipa"
 
 # Auto-increment patch version in pubspec.yaml
 CURRENT=$(grep "^version:" "$FLUTTER_PROJECT/pubspec.yaml" | awk '{print $2}')
@@ -38,27 +38,28 @@ APK_PATH="$FLUTTER_PROJECT/build/app/outputs/flutter-apk/app-release.apk"
 AAB_PATH="$FLUTTER_PROJECT/build/app/outputs/bundle/release/app-release.aab"
 echo "Built Android APK and AAB"
 
-# Build macOS
+# Build macOS — rename app to Sift.app before zipping
 flutter build macos --release
-MAC_APP="$FLUTTER_PROJECT/build/macos/Build/Products/Release/work_timer.app"
+MAC_BUILD="$FLUTTER_PROJECT/build/macos/Build/Products/Release"
+mv "$MAC_BUILD/work_timer.app" "$MAC_BUILD/Sift.app"
 MAC_ZIP="$FLUTTER_PROJECT/Sift-macOS.zip"
-ditto -c -k --sequesterRsrc --keepParent "$MAC_APP" "$MAC_ZIP"
+ditto -c -k --sequesterRsrc --keepParent "$MAC_BUILD/Sift.app" "$MAC_ZIP"
 echo "Built macOS"
 
-# Build Windows (cross-compile not supported on Mac — skip with notice)
-echo "Windows: build not supported on Mac, skipping"
+# Build Windows (cross-compile not supported on Mac — built via GitHub Actions)
+echo "Windows: built automatically via GitHub Actions on release"
 
 # Package into .ipa
-rm -rf Payload work_timer.ipa
+rm -rf Payload Sift.ipa
 mkdir Payload
 cp -r build/ios/iphoneos/Runner.app Payload/
-zip -r work_timer.ipa Payload > /dev/null
+zip -r Sift.ipa Payload > /dev/null
 rm -rf Payload
 
-IPA_SIZE=$(wc -c < work_timer.ipa)
+IPA_SIZE=$(wc -c < Sift.ipa)
 
 echo ""
-echo "Built work_timer.ipa ($((IPA_SIZE / 1024 / 1024))MB)"
+echo "Built Sift.ipa ($((IPA_SIZE / 1024 / 1024))MB)"
 
 # Update apps.json
 TODAY=$(date +%Y-%m-%d)
@@ -74,7 +75,7 @@ cat > "$ALTSTORE_REPO/apps.json" <<EOF
       "subtitle": "Work session timer with notifications",
       "version": "$VERSION",
       "versionDate": "$TODAY",
-      "downloadURL": "https://github.com/utsapoddar/work-timer-altstore/releases/download/$TAG/work_timer.ipa",
+      "downloadURL": "https://github.com/utsapoddar/work-timer-altstore/releases/download/$TAG/Sift.ipa",
       "localizedDescription": "A work session timer that helps you manage your work and break intervals with notifications.",
       "iconURL": "https://raw.githubusercontent.com/utsapoddar/work-timer-altstore/main/icon.png",
       "tintColor": "F97316",
@@ -97,9 +98,10 @@ else
     gh release create "$TAG" "$IPA_PATH" "$APK_PATH" "$AAB_PATH" "$MAC_ZIP" --title "Sift $TAG" --notes "$(cat <<EOF
 ## Sift $TAG
 
-**iOS:** Download \`work_timer.ipa\` and sideload via AltStore
+**iOS:** Download \`Sift.ipa\` and sideload via AltStore
 **Android:** Download \`app-release.apk\` to install directly, or \`app-release.aab\` for Play Console
-**macOS:** Download \`Sift-macOS.zip\`, unzip and drag to Applications
+**macOS:** Download \`Sift-macOS.zip\`, unzip and drag \`Sift.app\` to Applications
+**Windows:** Download \`Sift-Windows.zip\`, unzip and run \`Sift.exe\`
 EOF
 )"
 fi
@@ -110,10 +112,10 @@ echo ""
 echo "============================================"
 echo " Released Sift $TAG"
 echo ""
-echo " iOS:     .ipa uploaded to GitHub release"
-echo " Android: .apk + .aab uploaded to GitHub release"
+echo " iOS:     Sift.ipa uploaded to GitHub release"
+echo " Android: app-release.apk + .aab uploaded to GitHub release"
 echo " macOS:   Sift-macOS.zip uploaded to GitHub release"
-echo " Windows: build on a Windows machine separately"
+echo " Windows: Sift-Windows.zip built via GitHub Actions"
 echo ""
 echo " Upload AAB to Play Console:"
 echo " $AAB_PATH"
