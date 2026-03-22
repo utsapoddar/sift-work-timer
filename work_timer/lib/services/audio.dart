@@ -13,9 +13,9 @@ Future<void> playAlarm() async {
   try {
     await _player.stop();
     if (Platform.isAndroid) {
-      await _player.setAudioContext(const AudioContext(
-        android: AudioContextAndroid(
-          usageType: AndroidAudioUsage.alarm,
+      await _player.setAudioContext(AudioContext(
+        android: const AudioContextAndroid(
+          usageType: AndroidUsageType.alarm,
           audioFocus: AndroidAudioFocus.gainTransientExclusive,
           isSpeakerphoneOn: false,
           stayAwake: false,

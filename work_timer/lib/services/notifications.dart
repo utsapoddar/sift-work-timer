@@ -12,7 +12,7 @@ Stream<String> get onNotificationAction => _notifActionController.stream;
 
 Future<void> initNotifications() async {
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const macosSettings = DarwinInitializationSettings(
+  final macosSettings = DarwinInitializationSettings(
     requestAlertPermission: true,
     requestBadgePermission: true,
     requestSoundPermission: true,
@@ -36,7 +36,7 @@ Future<void> initNotifications() async {
   );
 
   await _plugin.initialize(
-    const InitializationSettings(
+    InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
       macOS: macosSettings,
