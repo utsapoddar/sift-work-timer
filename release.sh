@@ -6,8 +6,19 @@ FLUTTER_PROJECT="$REPO_ROOT/work_timer"
 ALTSTORE_REPO="$REPO_ROOT"
 IPA_PATH="$FLUTTER_PROJECT/work_timer.ipa"
 
-# Get version from pubspec.yaml
-VERSION=$(grep "^version:" "$FLUTTER_PROJECT/pubspec.yaml" | awk '{print $2}' | cut -d'+' -f1)
+# Auto-increment patch version in pubspec.yaml
+CURRENT=$(grep "^version:" "$FLUTTER_PROJECT/pubspec.yaml" | awk '{print $2}')
+SEMVER=$(echo "$CURRENT" | cut -d'+' -f1)
+BUILD=$(echo "$CURRENT" | cut -d'+' -f2)
+MAJOR=$(echo "$SEMVER" | cut -d'.' -f1)
+MINOR=$(echo "$SEMVER" | cut -d'.' -f2)
+PATCH=$(echo "$SEMVER" | cut -d'.' -f3)
+NEW_PATCH=$((PATCH + 1))
+NEW_BUILD=$((BUILD + 1))
+VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+NEW_VERSION="${VERSION}+${NEW_BUILD}"
+sed -i '' "s/^version: .*/version: $NEW_VERSION/" "$FLUTTER_PROJECT/pubspec.yaml"
+echo "Version bumped: $CURRENT → $NEW_VERSION"
 TAG="v$VERSION"
 
 echo ""
@@ -20,11 +31,22 @@ echo ""
 cd "$FLUTTER_PROJECT"
 flutter build ios --release
 
-# Build release Android AAB
+# Build release Android APK and AAB
+JAVA_HOME=/opt/homebrew/opt/openjdk flutter build apk --release
 JAVA_HOME=/opt/homebrew/opt/openjdk flutter build appbundle --release
-echo ""
-echo "Built app-release.aab"
-echo "Upload it to Play Console: $FLUTTER_PROJECT/build/app/outputs/bundle/release/app-release.aab"
+APK_PATH="$FLUTTER_PROJECT/build/app/outputs/flutter-apk/app-release.apk"
+AAB_PATH="$FLUTTER_PROJECT/build/app/outputs/bundle/release/app-release.aab"
+echo "Built Android APK and AAB"
+
+# Build macOS
+flutter build macos --release
+MAC_APP="$FLUTTER_PROJECT/build/macos/Build/Products/Release/work_timer.app"
+MAC_ZIP="$FLUTTER_PROJECT/Sift-macOS.zip"
+ditto -c -k --sequesterRsrc --keepParent "$MAC_APP" "$MAC_ZIP"
+echo "Built macOS"
+
+# Build Windows (cross-compile not supported on Mac — skip with notice)
+echo "Windows: build not supported on Mac, skipping"
 
 # Package into .ipa
 rm -rf Payload work_timer.ipa
@@ -68,11 +90,18 @@ cd "$ALTSTORE_REPO"
 git add apps.json work_timer/
 git commit -m "Release $TAG" 2>/dev/null || echo "Nothing new to commit in source"
 
-# Create or update GitHub release
+# Create or update GitHub release with all artifacts
 if gh release view "$TAG" &>/dev/null; then
-    gh release upload "$TAG" "$IPA_PATH" --clobber
+    gh release upload "$TAG" "$IPA_PATH" "$APK_PATH" "$AAB_PATH" "$MAC_ZIP" --clobber
 else
-    gh release create "$TAG" "$IPA_PATH" --title "Sift $TAG" --notes "Release $TAG"
+    gh release create "$TAG" "$IPA_PATH" "$APK_PATH" "$AAB_PATH" "$MAC_ZIP" --title "Sift $TAG" --notes "$(cat <<EOF
+## Sift $TAG
+
+**iOS:** Download \`work_timer.ipa\` and sideload via AltStore
+**Android:** Download \`app-release.apk\` to install directly, or \`app-release.aab\` for Play Console
+**macOS:** Download \`Sift-macOS.zip\`, unzip and drag to Applications
+EOF
+)"
 fi
 
 git push
@@ -80,9 +109,13 @@ git push
 echo ""
 echo "============================================"
 echo " Released Sift $TAG"
-echo " AltStore source updated"
 echo ""
-echo " Android AAB ready to upload to Play Console:"
-echo " $FLUTTER_PROJECT/build/app/outputs/bundle/release/app-release.aab"
+echo " iOS:     .ipa uploaded to GitHub release"
+echo " Android: .apk + .aab uploaded to GitHub release"
+echo " macOS:   Sift-macOS.zip uploaded to GitHub release"
+echo " Windows: build on a Windows machine separately"
+echo ""
+echo " Upload AAB to Play Console:"
+echo " $AAB_PATH"
 echo "============================================"
 echo ""
