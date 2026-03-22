@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -167,7 +168,11 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                     if (result != null &&
                         result.files.single.path != null) {
-                      await _saveRingtone(result.files.single.path);
+                      final picked = File(result.files.single.path!);
+                      final dir = await getApplicationDocumentsDirectory();
+                      final dest = File('${dir.path}/custom_ringtone${result.files.single.extension != null ? '.${result.files.single.extension}' : ''}');
+                      await picked.copy(dest.path);
+                      await _saveRingtone(dest.path);
                       if (mounted) await playAlarm();
                     }
                   },
