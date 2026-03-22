@@ -1,6 +1,6 @@
 # Sift
 
-A work session timer for iOS and Android. Set your work hours, and Sift handles the rest — sending notifications at the start and end of each work block and break so you stay on track without watching the clock.
+A work session timer for iOS, Android, macOS, and Windows. Set your work hours, and Sift handles the rest — sending notifications at the start and end of each work block and break so you stay on track without watching the clock.
 
 ## Download
 
@@ -9,6 +9,7 @@ A work session timer for iOS and Android. Set your work hours, and Sift handles 
 | iOS (.ipa) | [Download work_timer.ipa](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/work_timer.ipa) |
 | Android (.apk) | [Download app-release.apk](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/app-release.apk) |
 | macOS | [Download Sift-macOS.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-macOS.zip) |
+| Windows | [Download Sift-Windows.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-Windows.zip) |
 
 ---
 
@@ -66,6 +67,17 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 4. On first launch, macOS may say the app can't be opened because it's from an unidentified developer
 5. Go to **System Settings → Privacy & Security** → scroll down and click **Open Anyway**
 6. Click **Open** on the confirmation prompt
+
+---
+
+## Windows Installation
+
+1. Download `Sift-Windows.zip` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
+2. Unzip the file to a folder of your choice (e.g. `C:\Program Files\Sift`)
+3. Run `work_timer.exe` inside the unzipped folder
+4. Windows may show a SmartScreen warning — click **More info → Run anyway**
+
+> The app is portable — no installer needed. You can pin `work_timer.exe` to your taskbar for quick access.
 
 ---
 
