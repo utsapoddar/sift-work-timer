@@ -2,7 +2,7 @@
 
 **Last updated: March 23, 2026**
 
-Sift ("the app") is a work timer app developed by Utsav Poddar. This privacy policy explains how the app handles your information.
+Sift ("the app") is a work timer app developed by Utsa Poddar. This privacy policy explains how the app handles your information.
 
 ## Information We Collect
 
