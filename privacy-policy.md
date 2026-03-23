@@ -30,4 +30,4 @@ If this policy changes, the updated version will be posted at this URL.
 
 ## Contact
 
-If you have any questions, contact: utsapoddar@gmail.com
+If you have any questions, contact: anondo.contact@gmail.com
