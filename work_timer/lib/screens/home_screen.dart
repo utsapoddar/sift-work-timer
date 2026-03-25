@@ -533,7 +533,8 @@ class _HomeScreenState extends State<HomeScreen>
                   TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           content: SizedBox(
             width: 320,
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 ...presets.entries.map((e) => RadioListTile<int>(
@@ -581,6 +582,8 @@ class _HomeScreenState extends State<HomeScreen>
                               border: OutlineInputBorder(),
                               enabledBorder: OutlineInputBorder(
                                   borderSide: BorderSide(color: _border)),
+                              focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: _accent)),
                               isDense: true,
                             ),
                           ),
@@ -597,6 +600,8 @@ class _HomeScreenState extends State<HomeScreen>
                               border: OutlineInputBorder(),
                               enabledBorder: OutlineInputBorder(
                                   borderSide: BorderSide(color: _border)),
+                              focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: _accent)),
                               isDense: true,
                             ),
                           ),
@@ -605,6 +610,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
               ],
+            ),
             ),
           ),
           actions: [
