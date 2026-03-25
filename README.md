@@ -1,13 +1,13 @@
 # Sift
 
-A work session timer for iOS, Android, macOS, and Windows. Set your work hours, and Sift handles the rest — sending notifications at the start and end of each work block and break so you stay on track without watching the clock.
+A work session timer for iOS, Android, macOS, and Windows. Set your work hours, and Sift handles the rest — playing an alarm at each phase transition so you stay on track without watching the clock.
 
 ## Download
 
 | Platform | Download |
 |---|---|
 | iOS (.ipa) | [Download Sift.ipa](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift.ipa) |
-| Android (.apk) | [Download app-release.apk](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/app-release.apk) |
+| Android (.apk) | [Download Sift.apk](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift.apk) |
 | macOS | [Download Sift-macOS.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-macOS.zip) |
 | Windows | [Download Sift-Windows.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-Windows.zip) |
 
@@ -50,7 +50,7 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 ## Android Installation
 
-1. On your Android phone, download `app-release.apk` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
+1. On your Android phone, download `Sift.apk` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
 2. Open the downloaded file — you may see a prompt saying **"Install unknown apps"**
 3. Tap **Settings** on that prompt → enable **Allow from this source** → go back and tap **Install**
 4. Once installed, open **Sift** from your app drawer
@@ -83,9 +83,9 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 ## Features
 
-- Set a custom work start time and session length
-- Automatic break reminders (short breaks + lunch)
-- Local notifications at every phase transition
+- Set a custom session length
+- Automatic phase transitions (2h work → 15m break → 1h45m work → 1h lunch → repeat)
+- Alarm rings at every phase boundary
 - Streak tracking to build a daily work habit
 - Minimal, distraction-free dark UI
 
@@ -94,10 +94,8 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 | Component | Tool |
 |---|---|
 | Framework | Flutter (Dart) |
-| Notifications | flutter_local_notifications |
 | Storage | shared_preferences |
 | Audio | audioplayers |
-| Timezone | flutter_timezone |
 
 ## Source
 
