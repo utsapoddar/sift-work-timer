@@ -95,8 +95,17 @@ class TimerService : Service() {
                 this, i, alarmIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMs, pi)
+            // setAlarmClock has highest priority — OEMs display it in the status bar and
+            // virtually never suppress it, unlike setExactAndAllowWhileIdle on aggressive OEMs.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                val showIntent = PendingIntent.getActivity(
+                    this, i + 100,
+                    Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    },
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(timeMs, showIntent), pi)
             } else {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeMs, pi)
             }
