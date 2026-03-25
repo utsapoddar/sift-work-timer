@@ -61,6 +61,13 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(null)
                 }
+                "silenceTimerService" -> {
+                    val intent = Intent(this, TimerService::class.java).apply {
+                        action = TimerService.ACTION_SILENCE
+                    }
+                    startService(intent)
+                    result.success(null)
+                }
                 "stopTimerService" -> {
                     val intent = Intent(this, TimerService::class.java).apply {
                         action = TimerService.ACTION_CANCEL_ALARMS

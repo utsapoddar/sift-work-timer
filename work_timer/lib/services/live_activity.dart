@@ -90,6 +90,12 @@ Future<void> stopTimerService() async {
   try { await _channel.invokeMethod('stopTimerService'); } catch (_) {}
 }
 
+/// Silence the alarm sound in the Android foreground service without stopping the timer.
+Future<void> silenceTimerService() async {
+  if (!Platform.isAndroid) return;
+  try { await _channel.invokeMethod('silenceTimerService'); } catch (_) {}
+}
+
 /// Returns the picked file path, or null if cancelled.
 Future<String?> pickAudioFile() async {
   if (!Platform.isIOS) return null;
