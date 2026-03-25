@@ -342,6 +342,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _stopAlarm() async {
     await stopAlarm();
+    await silenceTimerService();
     if (_sessionComplete) {
       _stop();
     } else {
