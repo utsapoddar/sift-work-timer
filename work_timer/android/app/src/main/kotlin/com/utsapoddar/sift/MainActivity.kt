@@ -23,6 +23,7 @@ class MainActivity : FlutterActivity() {
             val action = when (intent.action) {
                 TimerService.ACTION_STOP -> "stop"
                 TimerService.ACTION_SILENCE -> "silence"
+                "com.sift.timer.alarm_notify" -> "alarm"
                 else -> return
             }
             runOnUiThread {
@@ -38,7 +39,18 @@ class MainActivity : FlutterActivity() {
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
                 "startTimerService" -> {
-                    val intent = Intent(this, TimerService::class.java)
+                    @Suppress("UNCHECKED_CAST")
+                    val args = call.arguments as? Map<String, Any> ?: emptyMap<String, Any>()
+                    val phaseNames = (args["phaseNames"] as? List<*>)
+                        ?.filterIsInstance<String>()?.toTypedArray() ?: emptyArray()
+                    val phaseEndTimes = (args["phaseEndTimes"] as? List<*>)
+                        ?.map { (it as Number).toLong() }?.toLongArray() ?: LongArray(0)
+
+                    val intent = Intent(this, TimerService::class.java).apply {
+                        action = TimerService.ACTION_SCHEDULE_ALARMS
+                        putExtra(TimerService.EXTRA_PHASE_NAMES, phaseNames)
+                        putExtra(TimerService.EXTRA_PHASE_END_TIMES, phaseEndTimes)
+                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {
@@ -47,7 +59,10 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "stopTimerService" -> {
-                    stopService(Intent(this, TimerService::class.java))
+                    val intent = Intent(this, TimerService::class.java).apply {
+                        action = TimerService.ACTION_CANCEL_ALARMS
+                    }
+                    startService(intent)
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -57,7 +72,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Request notification permission on launch so it's settled before the timer starts
+        // Request notification permission on launch so it's settled before timer starts
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -67,6 +82,7 @@ class MainActivity : FlutterActivity() {
         val filter = IntentFilter().apply {
             addAction(TimerService.ACTION_STOP)
             addAction(TimerService.ACTION_SILENCE)
+            addAction("com.sift.timer.alarm_notify")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(actionReceiver, filter, RECEIVER_NOT_EXPORTED)
