@@ -6,10 +6,10 @@ A work session timer for iOS, Android, macOS, and Windows. Set your work hours, 
 
 | Platform | Download |
 |---|---|
-| iOS (.ipa) | [Download Sift.ipa](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift.ipa) |
-| Android (.apk) | [Download Sift.apk](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift.apk) |
-| macOS | [Download Sift-macOS.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-macOS.zip) |
-| Windows | [Download Sift-Windows.zip](https://github.com/utsapoddar/work-timer-altstore/releases/latest/download/Sift-Windows.zip) |
+| iOS (.ipa) | [Download Sift.ipa](https://github.com/utsapoddar/sift-work-timer/releases/latest/download/Sift.ipa) |
+| Android (.apk) | [Download Sift.apk](https://github.com/utsapoddar/sift-work-timer/releases/latest/download/Sift.apk) |
+| macOS | [Download Sift-macOS.zip](https://github.com/utsapoddar/sift-work-timer/releases/latest/download/Sift-macOS.zip) |
+| Windows | [Download Sift-Windows.zip](https://github.com/utsapoddar/sift-work-timer/releases/latest/download/Sift-Windows.zip) |
 
 ---
 
@@ -34,7 +34,7 @@ In short:
 2. Go to the **Browse** tab → tap **+** in the top right
 3. Paste this URL:
    ```
-   https://raw.githubusercontent.com/utsapoddar/work-timer-altstore/main/apps.json
+   https://raw.githubusercontent.com/utsapoddar/sift-work-timer/main/apps.json
    ```
 4. Tap **Sift → Free** to install
 
@@ -50,7 +50,7 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 ## Android Installation
 
-1. On your Android phone, download `Sift.apk` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
+1. On your Android phone, download `Sift.apk` from the [latest release](https://github.com/utsapoddar/sift-work-timer/releases/latest)
 2. Open the downloaded file — you may see a prompt saying **"Install unknown apps"**
 3. Tap **Settings** on that prompt → enable **Allow from this source** → go back and tap **Install**
 4. Once installed, open **Sift** from your app drawer
@@ -61,7 +61,7 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 ## macOS Installation
 
-1. Download `Sift-macOS.zip` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
+1. Download `Sift-macOS.zip` from the [latest release](https://github.com/utsapoddar/sift-work-timer/releases/latest)
 2. Unzip the file — you'll get `Sift.app`
 3. Drag it to your **Applications** folder
 4. On first launch, macOS may say the app can't be opened because it's from an unidentified developer
@@ -72,7 +72,7 @@ AltStore re-signs the app every 7 days using a free Apple ID. To enable backgrou
 
 ## Windows Installation
 
-1. Download `Sift-Windows.zip` from the [latest release](https://github.com/utsapoddar/work-timer-altstore/releases/latest)
+1. Download `Sift-Windows.zip` from the [latest release](https://github.com/utsapoddar/sift-work-timer/releases/latest)
 2. Unzip the file to a folder of your choice (e.g. `C:\Program Files\Sift`)
 3. Run `Sift.exe` inside the unzipped folder
 4. Windows may show a SmartScreen warning — click **More info → Run anyway**
@@ -104,8 +104,8 @@ This repo contains both the app source code and the AltStore distribution source
 To build from source:
 
 ```bash
-git clone https://github.com/utsapoddar/work-timer-altstore.git
-cd work-timer-altstore/work_timer
+git clone https://github.com/utsapoddar/sift-work-timer.git
+cd sift-work-timer/work_timer
 flutter pub get
 flutter run
 ```

@@ -9,9 +9,9 @@
       "subtitle": "Work session timer with notifications",
       "version": "1.0.3",
       "versionDate": "2026-03-22",
-      "downloadURL": "https://github.com/utsapoddar/work-timer-altstore/releases/download/v1.0.3/Sift.ipa",
+      "downloadURL": "https://github.com/utsapoddar/sift-work-timer/releases/download/v1.0.3/Sift.ipa",
       "localizedDescription": "A work session timer that helps you manage your work and break intervals with notifications.",
-      "iconURL": "https://raw.githubusercontent.com/utsapoddar/work-timer-altstore/main/icon.png",
+      "iconURL": "https://raw.githubusercontent.com/utsapoddar/sift-work-timer/main/icon.png",
       "tintColor": "F97316",
       "size":  9168057
     }
