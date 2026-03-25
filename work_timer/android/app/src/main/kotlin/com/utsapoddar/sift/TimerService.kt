@@ -70,6 +70,13 @@ class TimerService : Service() {
                 updateNotification()
                 scheduleAlarms(names, times)
             }
+            ACTION_SILENCE -> {
+                stopAlarmSound()
+                // Also notify Flutter so the UI can react
+                sendBroadcast(Intent("com.sift.timer.alarm_notify").setPackage(packageName).apply {
+                    action = ACTION_SILENCE
+                })
+            }
             ACTION_CANCEL_ALARMS -> {
                 cancelAlarms()
                 stopAlarmSound()
@@ -180,8 +187,8 @@ class TimerService : Service() {
             this, 0, stopIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val silenceIntent = Intent(ACTION_SILENCE).setPackage(packageName)
-        val silencePi = PendingIntent.getBroadcast(
+        val silenceIntent = Intent(this, TimerService::class.java).apply { action = ACTION_SILENCE }
+        val silencePi = PendingIntent.getService(
             this, 1, silenceIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
