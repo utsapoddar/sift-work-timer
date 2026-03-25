@@ -61,7 +61,7 @@ class TimerService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Sift")
             .setContentText("Timer running")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .addAction(0, "Stop", stopPi)
             .addAction(0, "Silence", silencePi)

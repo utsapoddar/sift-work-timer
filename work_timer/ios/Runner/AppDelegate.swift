@@ -34,7 +34,26 @@ struct SiftActivityAttributes: ActivityAttributes {
     // .playback category bypasses the silent switch so alarms always make noise
     try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
     try? AVAudioSession.sharedInstance().setActive(true)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAudioInterruption(_:)),
+      name: AVAudioSession.interruptionNotification,
+      object: AVAudioSession.sharedInstance()
+    )
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // Restart silent keep-alive loop after phone calls / Siri / other audio interruptions
+  @objc private func handleAudioInterruption(_ notification: Notification) {
+    guard let userInfo = notification.userInfo,
+          let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+          let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+    if type == .ended {
+      try? AVAudioSession.sharedInstance().setActive(true)
+      guard !audioEngine.isRunning else { return }
+      try? audioEngine.start()
+      silentNode.play()
+    }
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

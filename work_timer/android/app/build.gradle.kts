@@ -12,7 +12,7 @@ val keyPropertiesFile = rootProject.file("key.properties")
 if (keyPropertiesFile.exists()) keyProperties.load(keyPropertiesFile.inputStream())
 
 android {
-    namespace = "com.example.work_timer"
+    namespace = "com.utsapoddar.sift"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.work_timer"
+        applicationId = "com.utsapoddar.sift"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

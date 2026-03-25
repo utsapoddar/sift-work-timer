@@ -7,7 +7,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/schedule.dart';
-import '../services/notifications.dart';
 import '../services/audio.dart';
 import '../services/milestones.dart';
 import '../services/live_activity.dart';
@@ -44,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen>
   int _lastPhaseIndex = -1;
   String? _ringtonePath;
   StreamSubscription<void>? _alarmCompleteSub;
-  StreamSubscription<String>? _notifActionSub;
   late final AnimationController _pulseCtrl;
   int _totalSessions = 0;
   int _streakDays = 0;
@@ -78,14 +76,6 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
     }
-    _notifActionSub = onNotificationAction.listen((action) {
-      if (!mounted) return;
-      if (action == 'stop') {
-        _stop();
-      } else if (action == 'silence') {
-        _stopAlarm();
-      }
-    });
     _alarmCompleteSub = onAlarmComplete.listen((_) {
       if (!mounted) return;
       if (_sessionComplete) {
@@ -101,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     _alarmCompleteSub?.cancel();
-    _notifActionSub?.cancel();
     _ticker?.cancel();
     super.dispose();
   }
@@ -112,6 +101,9 @@ class _HomeScreenState extends State<HomeScreen>
       _tick();
       _ticker?.cancel();
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    } else if (state == AppLifecycleState.paused && _running && !_paused) {
+      _ticker?.cancel();
+      _scheduleBackgroundWakeup();
     }
   }
 
@@ -132,15 +124,21 @@ class _HomeScreenState extends State<HomeScreen>
 
     // Silently break streak if more than 1 day has passed since last qualifying session
     if (lastDateStr != null && streak > 0) {
-      final lastDay = DateTime.parse(lastDateStr);
-      final today = DateTime.now();
-      final diff = DateTime(today.year, today.month, today.day)
-          .difference(DateTime(lastDay.year, lastDay.month, lastDay.day))
-          .inDays;
-      if (diff > 1) {
+      final lastDay = DateTime.tryParse(lastDateStr);
+      if (lastDay == null) {
         streak = 0;
         await prefs.setInt(_prefKeyStreakDays, 0);
         await prefs.remove(_prefKeyStreakDate);
+      } else {
+        final today = DateTime.now();
+        final diff = DateTime(today.year, today.month, today.day)
+            .difference(DateTime(lastDay.year, lastDay.month, lastDay.day))
+            .inDays;
+        if (diff > 1) {
+          streak = 0;
+          await prefs.setInt(_prefKeyStreakDays, 0);
+          await prefs.remove(_prefKeyStreakDate);
+        }
       }
     }
 
@@ -265,12 +263,15 @@ class _HomeScreenState extends State<HomeScreen>
       } else if (lastDateStr == todayStr) {
         return; // already counted today
       } else {
-        final lastDay = DateTime.parse(lastDateStr);
-        final diff = DateTime(today.year, today.month, today.day)
-            .difference(
-                DateTime(lastDay.year, lastDay.month, lastDay.day))
-            .inDays;
-        newStreak = diff == 1 ? _streakDays + 1 : 1;
+        final lastDay = DateTime.tryParse(lastDateStr);
+        if (lastDay == null) {
+          newStreak = 1;
+        } else {
+          final diff = DateTime(today.year, today.month, today.day)
+              .difference(DateTime(lastDay.year, lastDay.month, lastDay.day))
+              .inDays;
+          newStreak = diff == 1 ? _streakDays + 1 : 1;
+        }
       }
 
       await prefs.setInt(_prefKeyStreakDays, newStreak);
@@ -287,11 +288,25 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  void _scheduleBackgroundWakeup() {
+    final schedule = _schedule;
+    if (schedule == null) return;
+    final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
+    final idx = schedule.currentPhaseIndex(now);
+    if (idx >= schedule.phases.length) return;
+    // Wall-clock moment this phase ends (accounts for any paused time)
+    final phaseEndWall = schedule.phases[idx].endTime
+        .add(Duration(milliseconds: _totalPausedMs));
+    final delay = phaseEndWall.difference(DateTime.now()) + const Duration(seconds: 1);
+    _ticker = Timer(delay.isNegative ? Duration.zero : delay, () {
+      _tick();
+      if (_running && !_paused) _scheduleBackgroundWakeup();
+    });
+  }
+
   void _start() async {
-    await requestPermissions();
     final now = DateTime.now();
     final schedule = Schedule.create(now, _totalMinutes);
-    await scheduleAll(schedule);
     setState(() {
       _schedule = schedule;
       _running = true;
@@ -337,7 +352,6 @@ class _HomeScreenState extends State<HomeScreen>
 
     _ticker?.cancel();
     _ticker = null;
-    await cancelAll();
     await stopAlarm();
     await stopTimerAudio();
     await stopTimerService();
@@ -378,7 +392,6 @@ class _HomeScreenState extends State<HomeScreen>
   void _pauseSession() {
     _ticker?.cancel();
     _ticker = null;
-    cancelAll();
     setState(() {
       _paused = true;
       _pauseStart = DateTime.now();
@@ -404,7 +417,6 @@ class _HomeScreenState extends State<HomeScreen>
       _totalPausedMs += DateTime.now().difference(start).inMilliseconds;
     }
     final schedule = _schedule;
-    if (schedule != null) scheduleAll(schedule, offsetMs: _totalPausedMs);
     setState(() {
       _paused = false;
       _pauseStart = null;
@@ -436,7 +448,6 @@ class _HomeScreenState extends State<HomeScreen>
     if (idx >= schedule.phases.length) {
       _ticker?.cancel();
       _ticker = null;
-      cancelAll();
       _onSessionComplete(); // fire-and-forget, updates sessions + streak
       setState(() => _sessionComplete = true);
       _triggerAlarm();

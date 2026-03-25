@@ -58,33 +58,34 @@ class Schedule {
     Duration scaled(double ratio) =>
         Duration(seconds: (total * ratio).round());
 
-    final workBlock   = scaled(5 / 24);
-    final shortBreak  = scaled(1 / 36);
-    final lunchBreak  = scaled(1 / 9);
+    final workLong   = scaled(2 / 9);   // 2h in a 9h session
+    final shortBreak = scaled(1 / 36);  // 15min
+    final workShort  = scaled(7 / 36);  // 1h45m
+    final lunchBreak = scaled(1 / 9);   // 1h
 
     final phaseDefs = [
-      Phase(name: 'Work', description: 'Focus block', duration: workBlock),
+      Phase(name: 'Work', description: 'Focus block', duration: workLong),
       Phase(
         name: 'Short Break',
         description: 'Take a short break',
         duration: shortBreak,
         isBreak: true,
       ),
-      Phase(name: 'Work', description: 'Focus block', duration: workBlock),
+      Phase(name: 'Work', description: 'Focus block', duration: workShort),
       Phase(
         name: 'Lunch Break',
         description: 'Enjoy your lunch break',
         duration: lunchBreak,
         isBreak: true,
       ),
-      Phase(name: 'Work', description: 'Focus block', duration: workBlock),
+      Phase(name: 'Work', description: 'Focus block', duration: workLong),
       Phase(
         name: 'Short Break',
         description: 'Take a short break',
         duration: shortBreak,
         isBreak: true,
       ),
-      Phase(name: 'Work', description: 'Focus block', duration: workBlock),
+      Phase(name: 'Work', description: 'Focus block', duration: workShort),
     ];
 
     final phases = <ScheduledPhase>[];
