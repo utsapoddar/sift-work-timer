@@ -34,6 +34,7 @@ class TimerService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentPhaseName: String = "Work"
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -44,6 +45,10 @@ class TimerService : Service() {
             startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(NOTIF_ID, buildNotification())
+        }
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "sift:timer").apply {
+            acquire(12 * 60 * 60 * 1000L) // max 12h, auto-released when service stops
         }
     }
 
@@ -77,6 +82,8 @@ class TimerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopAlarmSound()
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
