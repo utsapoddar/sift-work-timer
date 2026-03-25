@@ -31,3 +31,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload ${{ github.event.release.tag_name }} Sift-Windows.zip --clobber
+          mv work_timer/build/app/outputs/flutter-apk/app-release.apk Sift.apk || true
+          gh release upload ${{ github.event.release.tag_name }} Sift.apk --clobber || true
