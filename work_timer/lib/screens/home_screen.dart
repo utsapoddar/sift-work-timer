@@ -72,6 +72,8 @@ class _HomeScreenState extends State<HomeScreen>
             _stop();
           } else if (action == 'silence') {
             _stopAlarm();
+          } else if (action == 'alarm') {
+            _tick(); // sync UI with current phase
           }
         }
       });
@@ -315,7 +317,10 @@ class _HomeScreenState extends State<HomeScreen>
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
     unawaited(startTimerAudio());
-    unawaited(startTimerService());
+    unawaited(startTimerService(
+      phaseNames: schedule.phases.map((p) => p.phase.name).toList(),
+      phaseEndTimes: schedule.phases.map((p) => p.endTime).toList(),
+    ));
     final phase = schedule.phases.first;
     final laErr = await startLiveActivity(
       phaseName: phase.phase.name,

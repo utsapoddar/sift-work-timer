@@ -70,10 +70,18 @@ Future<void> stopTimerAudio() async {
   try { await _channel.invokeMethod('stopTimerAudio'); } catch (_) {}
 }
 
-/// Start Android foreground service — keeps process alive so alarm fires even on silent.
-Future<void> startTimerService() async {
+/// Start Android foreground service and schedule exact alarms at each phase boundary.
+Future<void> startTimerService({
+  required List<String> phaseNames,
+  required List<DateTime> phaseEndTimes,
+}) async {
   if (!Platform.isAndroid) return;
-  try { await _channel.invokeMethod('startTimerService'); } catch (_) {}
+  try {
+    await _channel.invokeMethod('startTimerService', {
+      'phaseNames': phaseNames,
+      'phaseEndTimes': phaseEndTimes.map((t) => t.millisecondsSinceEpoch).toList(),
+    });
+  } catch (_) {}
 }
 
 /// Stop the Android foreground service.
