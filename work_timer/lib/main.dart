@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest_all.dart' as tzData;
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  tzData.initializeTimeZones();
+  await initNotifications();
+  await requestPermissions();
 
   final prefs = await SharedPreferences.getInstance();
   final onboarded = prefs.getBool('onboarded') ?? false;

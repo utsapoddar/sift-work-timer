@@ -10,6 +10,7 @@ import '../services/schedule.dart';
 import '../services/audio.dart';
 import '../services/milestones.dart';
 import '../services/live_activity.dart';
+import '../services/notifications.dart';
 import 'milestone_screen.dart';
 
 const _accent = Color(0xFFF97316);
@@ -43,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen>
   int _lastPhaseIndex = -1;
   String? _ringtonePath;
   StreamSubscription<void>? _alarmCompleteSub;
+  StreamSubscription<String>? _notifActionSub;
   late final AnimationController _pulseCtrl;
   int _totalSessions = 0;
   int _streakDays = 0;
@@ -86,6 +88,15 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() => _alarmPlaying = false);
       }
     });
+    // Handle Stop/Silence taps from notification action buttons
+    _notifActionSub = onNotificationAction.listen((action) {
+      if (!mounted) return;
+      if (action == 'stop') {
+        _stop();
+      } else if (action == 'silence') {
+        _stopAlarm();
+      }
+    });
   }
 
   @override
@@ -93,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     _alarmCompleteSub?.cancel();
+    _notifActionSub?.cancel();
     _ticker?.cancel();
     super.dispose();
   }
@@ -316,6 +328,9 @@ class _HomeScreenState extends State<HomeScreen>
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
+    // Schedule background notifications for every phase boundary so alarms
+    // fire even if iOS kills the silent audio loop or Android kills the service.
+    unawaited(scheduleAll(schedule));
     unawaited(startTimerAudio());
     unawaited(startTimerService(
       phaseNames: schedule.phases.map((p) => p.phase.name).toList(),
@@ -359,6 +374,7 @@ class _HomeScreenState extends State<HomeScreen>
     _ticker?.cancel();
     _ticker = null;
     await stopAlarm();
+    await cancelAll();
     await stopTimerAudio();
     await stopTimerService();
     await endLiveActivity();
@@ -454,8 +470,9 @@ class _HomeScreenState extends State<HomeScreen>
     if (idx >= schedule.phases.length) {
       _ticker?.cancel();
       _ticker = null;
-      _onSessionComplete(); // fire-and-forget, updates sessions + streak
+      _onSessionComplete();
       setState(() => _sessionComplete = true);
+      unawaited(cancelNotification(schedule.phases.length - 1));
       _triggerAlarm();
       return;
     }
@@ -465,6 +482,8 @@ class _HomeScreenState extends State<HomeScreen>
     final progress = phase.progress(now);
 
     if (idx != _lastPhaseIndex && _lastPhaseIndex != -1) {
+      // Cancel the notification for the completed phase — app handles alarm in-app
+      unawaited(cancelNotification(_lastPhaseIndex));
       _triggerAlarm();
       updateLiveActivity(
         phaseName: phase.phase.name,

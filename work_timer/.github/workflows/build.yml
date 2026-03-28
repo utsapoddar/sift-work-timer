@@ -1,0 +1,74 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get version from pubspec
+        id: version
+        run: |
+          echo "name=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package IPA
+        run: |
+          cd build/ios/iphoneos
+          mkdir Payload
+          cp -r Runner.app Payload/
+          zip -r Sift.ipa Payload/
+          mv Sift.ipa $GITHUB_WORKSPACE/Sift.ipa
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.name }}
+          name: Sift v${{ steps.version.outputs.name }}
+          files: Sift.ipa
+          make_latest: true
+
+      - name: Update AltStore source
+        run: |
+          SIZE=$(stat -f%z Sift.ipa)
+          VERSION="${{ steps.version.outputs.name }}"
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          python3 - <<EOF
+          import json
+          with open("altstore-source.json") as f:
+              source = json.load(f)
+          app = source["apps"][0]
+          app["version"] = "$VERSION"
+          app["versionDate"] = "$DATE"
+          app["downloadURL"] = f"https://github.com/utsapoddar/sift-work-timer/releases/download/v$VERSION/Sift.ipa"
+          app["size"] = $SIZE
+          with open("altstore-source.json", "w") as f:
+              json.dump(source, f, indent=2)
+              f.write("\n")
+          EOF
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add altstore-source.json
+          git diff --staged --quiet || git commit -m "chore: update AltStore source to v$VERSION [skip ci]"
+          git push
