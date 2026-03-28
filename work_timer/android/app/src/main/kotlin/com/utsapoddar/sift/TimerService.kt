@@ -10,6 +10,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -35,6 +37,7 @@ class TimerService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private var currentPhaseName: String = "Work"
     private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -53,7 +56,18 @@ class TimerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        // On START_STICKY restart the system passes null intent — restore phase name from prefs
+        if (intent == null) {
+            val saved = getSharedPreferences("sift_boot", Context.MODE_PRIVATE)
+                .getString("phase_names", null)
+            if (saved != null) {
+                currentPhaseName = saved.split(",").firstOrNull() ?: currentPhaseName
+                updateNotification()
+            }
+            return START_STICKY
+        }
+
+        when (intent.action) {
             ACTION_ALARM_FIRED -> {
                 currentPhaseName = intent.getStringExtra(EXTRA_PHASE_NAME) ?: currentPhaseName
                 updateNotification()
@@ -69,6 +83,8 @@ class TimerService : Service() {
                 currentPhaseName = if (names.isNotEmpty()) names[0] else "Work"
                 updateNotification()
                 scheduleAlarms(names, times)
+                // Persist for BootReceiver to reschedule after device reboot
+                savePhaseDataForBoot(names, times)
             }
             ACTION_SILENCE -> {
                 stopAlarmSound()
@@ -79,7 +95,9 @@ class TimerService : Service() {
             }
             ACTION_CANCEL_ALARMS -> {
                 cancelAlarms()
+                clearPhaseDataForBoot()
                 stopAlarmSound()
+                abandonAudioFocus()
                 stopSelf()
             }
         }
@@ -89,6 +107,7 @@ class TimerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopAlarmSound()
+        abandonAudioFocus()
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -101,6 +120,25 @@ class TimerService : Service() {
 
     private fun scheduleAlarms(names: Array<String>, times: LongArray) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        // On Android 12+ the user can revoke exact-alarm permission from Settings.
+        // setAlarmClock falls back to inexact delivery if the permission is missing —
+        // log a notification so the user knows to re-grant it.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID + 1,
+                NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle("Sift needs permission")
+                    .setContentText("Allow exact alarms so the timer rings on time. Tap to open settings.")
+                    .setContentIntent(PendingIntent.getActivity(
+                        this, 99,
+                        android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    ))
+                    .setAutoCancel(true)
+                    .build()
+            )
+        }
         times.forEachIndexed { i, timeMs ->
             val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
                 putExtra(EXTRA_PHASE_NAME, if (i + 1 < names.size) names[i + 1] else "Done")
@@ -137,8 +175,52 @@ class TimerService : Service() {
         }
     }
 
+    private fun requestAlarmAudioFocus() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .build()
+            audioFocusRequest = req
+            am.requestAudioFocus(req)
+        } else {
+            @Suppress("DEPRECATION")
+            am.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus(null)
+        }
+    }
+
+    private fun savePhaseDataForBoot(names: Array<String>, times: LongArray) {
+        getSharedPreferences("sift_boot", Context.MODE_PRIVATE).edit().apply {
+            // Store as comma-separated strings to preserve insertion order
+            putString("phase_names", names.joinToString(","))
+            putString("phase_times", times.joinToString(","))
+            apply()
+        }
+    }
+
+    private fun clearPhaseDataForBoot() {
+        getSharedPreferences("sift_boot", Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
     private fun playAlarm() {
         stopAlarmSound()
+        requestAlarmAudioFocus()
         val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val ringtonePath = prefs.getString("flutter.ringtone_path", null)
 

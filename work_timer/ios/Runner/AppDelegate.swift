@@ -34,11 +34,28 @@ struct SiftActivityAttributes: ActivityAttributes {
     // .playback category bypasses the silent switch so alarms always make noise
     try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
     try? AVAudioSession.sharedInstance().setActive(true)
+    // Copy alarm.mp3 from flutter_assets into Library/Sounds so local notifications
+    // can reference it by name ("alarm.mp3") regardless of flutter asset bundling path.
+    copyAlarmSoundToLibrary()
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(handleAudioInterruption(_:)),
       name: AVAudioSession.interruptionNotification,
       object: AVAudioSession.sharedInstance()
+    )
+    // Restart engine when audio route changes (AirPods disconnect, headphones pulled, etc.)
+    // Without this, AVAudioEngine silently stops and the timer keeps no background execution.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAudioRouteChange(_:)),
+      name: AVAudioSession.routeChangeNotification,
+      object: AVAudioSession.sharedInstance()
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleEngineConfigChange),
+      name: .AVAudioEngineConfigurationChange,
+      object: audioEngine
     )
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -49,10 +66,39 @@ struct SiftActivityAttributes: ActivityAttributes {
           let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
           let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
     if type == .ended {
+      restartAudioEngineIfNeeded()
+    }
+  }
+
+  // Restart engine after route changes — pulling headphones out triggers a route change that
+  // stops AVAudioEngine. Without this, the silent keep-alive loop dies and iOS suspends the app.
+  @objc private func handleAudioRouteChange(_ notification: Notification) {
+    guard let userInfo = notification.userInfo,
+          let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+          let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+    switch reason {
+    case .oldDeviceUnavailable, .newDeviceAvailable, .categoryChange:
+      restartAudioEngineIfNeeded()
+    default:
+      break
+    }
+  }
+
+  // AVAudioEngineConfigurationChange fires when the hardware graph changes (e.g. sample rate
+  // changes, output device removed). The engine must be restarted; it does not auto-recover.
+  @objc private func handleEngineConfigChange() {
+    restartAudioEngineIfNeeded()
+  }
+
+  private func restartAudioEngineIfNeeded() {
+    guard silentNode.isPlaying || audioEngine.isRunning else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+      guard let self = self else { return }
       try? AVAudioSession.sharedInstance().setActive(true)
-      guard !audioEngine.isRunning else { return }
-      try? audioEngine.start()
-      silentNode.play()
+      if !self.audioEngine.isRunning {
+        try? self.audioEngine.start()
+      }
+      self.silentNode.play()
     }
   }
 
@@ -133,6 +179,28 @@ struct SiftActivityAttributes: ActivityAttributes {
           result(nil)
         }
       }
+    }
+  }
+
+  // MARK: - Alarm Sound Setup
+
+  private func copyAlarmSoundToLibrary() {
+    let fm = FileManager.default
+    // Flutter bundles assets at flutter_assets/<path> inside the main bundle
+    guard let srcURL = Bundle.main.url(
+      forResource: "alarm", withExtension: "caf",
+      subdirectory: "flutter_assets/assets"
+    ) else { return }
+    guard let libURL = fm.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+    let soundsURL = libURL.appendingPathComponent("Sounds")
+    try? fm.createDirectory(at: soundsURL, withIntermediateDirectories: true, attributes: nil)
+    let destURL = soundsURL.appendingPathComponent("alarm.caf")
+    // Overwrite if source is newer (handles app updates with changed sound file)
+    let srcDate = (try? fm.attributesOfItem(atPath: srcURL.path))?[.modificationDate] as? Date
+    let destDate = (try? fm.attributesOfItem(atPath: destURL.path))?[.modificationDate] as? Date
+    if destDate == nil || srcDate.map({ $0 > destDate! }) == true {
+      try? fm.removeItem(at: destURL)
+      try? fm.copyItem(at: srcURL, to: destURL)
     }
   }
 

@@ -4,7 +4,6 @@ import 'package:timezone/timezone.dart' as tz;
 import 'schedule.dart';
 
 final _plugin = FlutterLocalNotificationsPlugin();
-
 final _notifActionController = StreamController<String>.broadcast();
 
 /// Emits action IDs ('stop' or 'silence') when user taps a notification action button.
@@ -12,34 +11,25 @@ Stream<String> get onNotificationAction => _notifActionController.stream;
 
 Future<void> initNotifications() async {
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  final macosSettings = DarwinInitializationSettings(
+  final categoryActions = [
+    DarwinNotificationAction.plain('stop', 'Stop'),
+    DarwinNotificationAction.plain('silence', 'Silence'),
+  ];
+  final darwinSettings = DarwinInitializationSettings(
     requestAlertPermission: true,
     requestBadgePermission: true,
     requestSoundPermission: true,
     notificationCategories: [
-      DarwinNotificationCategory(
-        'timer_alert',
-        actions: [
-          DarwinNotificationAction.plain('stop', 'Stop'),
-          DarwinNotificationAction.plain('silence', 'Silence'),
-        ],
-      ),
+      DarwinNotificationCategory('timer_alert', actions: categoryActions),
     ],
   );
-  const iosSettings = DarwinInitializationSettings(
-    requestAlertPermission: true,
-    requestBadgePermission: true,
-    requestSoundPermission: true,
-  );
-  const linuxSettings = LinuxInitializationSettings(
-    defaultActionName: 'Open',
-  );
+  const linuxSettings = LinuxInitializationSettings(defaultActionName: 'Open');
 
   await _plugin.initialize(
-    InitializationSettings(
+    settings: InitializationSettings(
       android: androidSettings,
-      iOS: iosSettings,
-      macOS: macosSettings,
+      iOS: darwinSettings,
+      macOS: darwinSettings,
       linux: linuxSettings,
     ),
     onDidReceiveNotificationResponse: (response) {
@@ -54,12 +44,12 @@ Future<void> initNotifications() async {
 Future<void> requestPermissions() async {
   await _plugin
       .resolvePlatformSpecificImplementation<
-          MacOSFlutterLocalNotificationsPlugin>()
+          IOSFlutterLocalNotificationsPlugin>()
       ?.requestPermissions(alert: true, badge: true, sound: true);
 
   await _plugin
       .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>()
+          MacOSFlutterLocalNotificationsPlugin>()
       ?.requestPermissions(alert: true, badge: true, sound: true);
 
   await _plugin
@@ -68,7 +58,7 @@ Future<void> requestPermissions() async {
       ?.requestNotificationsPermission();
 }
 
-const _channel = AndroidNotificationChannel(
+const _androidChannel = AndroidNotificationChannel(
   'work_timer',
   'Work Timer',
   description: 'Work session transition alerts',
@@ -78,13 +68,11 @@ const _channel = AndroidNotificationChannel(
 Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
   await cancelAll();
 
-  // Create Android notification channel
   await _plugin
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(_channel);
+      ?.createNotificationChannel(_androidChannel);
 
-  // Schedule a notification at the END of each phase (= start of next)
   for (int i = 0; i < schedule.phases.length; i++) {
     final phase = schedule.phases[i];
     final isLast = i == schedule.phases.length - 1;
@@ -98,9 +86,7 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
     } else {
       final next = schedule.phases[i + 1].phase;
       if (next.isBreak) {
-        title = next.name == 'Lunch Break'
-            ? 'Lunch time!'
-            : 'Break time!';
+        title = next.name == 'Lunch Break' ? 'Lunch time!' : 'Break time!';
         body = next.name == 'Lunch Break'
             ? 'Take your 1-hour lunch break.'
             : 'Take a 15-minute break.';
@@ -111,27 +97,33 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
     }
 
     final adjustedEnd = phase.endTime.add(Duration(milliseconds: offsetMs));
-    final scheduledTime = tz.TZDateTime.from(adjustedEnd, tz.local);
-    if (scheduledTime.isBefore(tz.TZDateTime.now(tz.local))) continue;
+    // Use absolute UTC epoch ms — correct regardless of device timezone
+    final scheduledTime = tz.TZDateTime.fromMillisecondsSinceEpoch(
+        tz.UTC, adjustedEnd.millisecondsSinceEpoch);
+    if (scheduledTime.isBefore(tz.TZDateTime.now(tz.UTC))) continue;
 
     await _plugin.zonedSchedule(
-      i,
-      title,
-      body,
-      scheduledTime,
-      NotificationDetails(
+      id: i,
+      title: title,
+      body: body,
+      scheduledDate: scheduledTime,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
+          _androidChannel.id,
+          _androidChannel.name,
+          channelDescription: _androidChannel.description,
           importance: Importance.high,
           priority: Priority.high,
           playSound: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         ),
-        iOS: const DarwinNotificationDetails(
+        iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          // alarm.caf is copied to Library/Sounds at app launch in AppDelegate
+          sound: 'alarm.caf',
+          categoryIdentifier: 'timer_alert',
         ),
         macOS: const DarwinNotificationDetails(
           presentAlert: true,
@@ -141,10 +133,12 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
+}
+
+Future<void> cancelNotification(int id) async {
+  await _plugin.cancel(id: id);
 }
 
 Future<void> cancelAll() async {
