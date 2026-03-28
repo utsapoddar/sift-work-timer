@@ -1,12 +1,12 @@
 {
-  "name": "Utsav's Apps",
+  "name": "Utsa's Apps",
   "identifier": "com.utsapoddar.altsource",
   "sourceURL": "https://raw.githubusercontent.com/utsapoddar/sift-work-timer/main/altstore-source.json",
   "apps": [
     {
       "name": "Sift",
       "bundleIdentifier": "com.example.workTimer",
-      "developerName": "Utsav Poddar",
+      "developerName": "Utsa Poddar",
       "subtitle": "Work session timer with automatic breaks",
       "version": "1.0.7",
       "versionDate": "2026-03-28T00:00:00Z",
