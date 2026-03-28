@@ -26,6 +26,7 @@ struct SiftActivityAttributes: ActivityAttributes {
   // Silent keep-alive loop — keeps app alive in background while timer runs
   private let audioEngine = AVAudioEngine()
   private let silentNode = AVAudioPlayerNode()
+  private var timerAudioActive = false
 
   override func application(
     _ application: UIApplication,
@@ -91,7 +92,7 @@ struct SiftActivityAttributes: ActivityAttributes {
   }
 
   private func restartAudioEngineIfNeeded() {
-    guard silentNode.isPlaying || audioEngine.isRunning else { return }
+    guard timerAudioActive else { return }
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
       guard let self = self else { return }
       try? AVAudioSession.sharedInstance().setActive(true)
@@ -205,6 +206,7 @@ struct SiftActivityAttributes: ActivityAttributes {
   }
 
   private func startTimerAudio() {
+    timerAudioActive = true
     guard !audioEngine.isRunning else { return }
     // Build a 0.5s silent buffer and loop it — keeps app alive in background
     // so Timer.periodic keeps firing and the alarm can play even on silent
@@ -223,6 +225,7 @@ struct SiftActivityAttributes: ActivityAttributes {
   }
 
   private func stopTimerAudio() {
+    timerAudioActive = false
     silentNode.stop()
     audioEngine.stop()
   }

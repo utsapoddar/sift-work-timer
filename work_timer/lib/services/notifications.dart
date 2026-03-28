@@ -124,6 +124,7 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
           // alarm.caf is copied to Library/Sounds at app launch in AppDelegate
           sound: 'alarm.caf',
           categoryIdentifier: 'timer_alert',
+          interruptionLevel: InterruptionLevel.timeSensitive,
         ),
         macOS: const DarwinNotificationDetails(
           presentAlert: true,
