@@ -75,4 +75,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git add altstore-source.json
           git diff --staged --quiet || git commit -m "chore: update AltStore source to v$VERSION [skip ci]"
-          git push
+          git pull --rebase && git push
