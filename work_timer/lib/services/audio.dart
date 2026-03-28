@@ -21,6 +21,13 @@ Future<void> playAlarm() async {
           stayAwake: false,
         ),
       ));
+    } else if (Platform.isIOS) {
+      await _player.setAudioContext(AudioContext(
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.playback,
+          options: const {},
+        ),
+      ));
     }
     final custom = customRingtonePath;
     if (custom != null && custom.isNotEmpty && File(custom).existsSync()) {
