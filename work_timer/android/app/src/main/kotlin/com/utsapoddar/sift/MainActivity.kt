@@ -20,6 +20,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private var timerActionCh: MethodChannel? = null
+    private var receiverRegistered = false
 
     private val actionReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
@@ -93,9 +94,18 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                     data = Uri.parse("package:$packageName")
-                })
+                }
+                // Many OEMs (Samsung, Xiaomi, etc.) don't expose this settings activity.
+                // Guard with resolveActivity + try-catch to avoid launch crashes.
+                if (intent.resolveActivity(packageManager) != null) {
+                    try {
+                        startActivity(intent)
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        // Ignore — user can manually whitelist the app in settings.
+                    }
+                }
             }
         }
         val filter = IntentFilter().apply {
@@ -109,10 +119,17 @@ class MainActivity : FlutterActivity() {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(actionReceiver, filter)
         }
+        receiverRegistered = true
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(actionReceiver)
+        if (receiverRegistered) {
+            try {
+                unregisterReceiver(actionReceiver)
+            } catch (_: IllegalArgumentException) {
+                // Receiver may have already been unregistered.
+            }
+        }
     }
 }
