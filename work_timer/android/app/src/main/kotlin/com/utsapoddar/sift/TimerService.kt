@@ -96,8 +96,8 @@ class TimerService : Service() {
             ACTION_CANCEL_ALARMS -> {
                 cancelAlarms()
                 clearPhaseDataForBoot()
-                stopAlarmSound()
-                abandonAudioFocus()
+                try { stopAlarmSound() } catch (_: Exception) {}
+                try { abandonAudioFocus() } catch (_: Exception) {}
                 stopSelf()
             }
         }
@@ -106,8 +106,8 @@ class TimerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        stopAlarmSound()
-        abandonAudioFocus()
+        try { stopAlarmSound() } catch (_: Exception) {}
+        try { abandonAudioFocus() } catch (_: Exception) {}
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -138,6 +138,7 @@ class TimerService : Service() {
                     .setAutoCancel(true)
                     .build()
             )
+            return
         }
         times.forEachIndexed { i, timeMs ->
             val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
@@ -225,16 +226,32 @@ class TimerService : Service() {
         val ringtonePath = prefs.getString("flutter.ringtone_path", null)
 
         try {
-            mediaPlayer = if (ringtonePath != null && File(ringtonePath).exists()) {
-                MediaPlayer().apply {
-                    setAudioAttributes(AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build())
-                    setDataSource(ringtonePath)
-                    prepare()
+            mediaPlayer = when {
+                ringtonePath.isNullOrBlank() -> null
+                ringtonePath.startsWith("content://") -> {
+                    contentResolver.openFileDescriptor(Uri.parse(ringtonePath), "r")?.use { pfd ->
+                        MediaPlayer().apply {
+                            setAudioAttributes(AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build())
+                            setDataSource(pfd.fileDescriptor)
+                            prepare()
+                        }
+                    }
                 }
-            } else {
+                File(ringtonePath).exists() -> {
+                    MediaPlayer().apply {
+                        setAudioAttributes(AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build())
+                        setDataSource(ringtonePath)
+                        prepare()
+                    }
+                }
+                else -> null
+            } ?: run {
                 val afd = assets.openFd("flutter_assets/assets/alarm.mp3")
                 MediaPlayer().apply {
                     setAudioAttributes(AudioAttributes.Builder()
@@ -247,15 +264,25 @@ class TimerService : Service() {
             }
             mediaPlayer?.apply {
                 isLooping = false
-                setOnCompletionListener { mp -> mp.release(); mediaPlayer = null }
+                setOnCompletionListener { mp ->
+                    if (mediaPlayer == mp) {
+                        try { mp.release() } catch (_: Exception) {}
+                        mediaPlayer = null
+                    }
+                }
                 start()
             }
         } catch (_: Exception) {}
     }
 
     private fun stopAlarmSound() {
-        mediaPlayer?.apply { if (isPlaying) stop(); release() }
-        mediaPlayer = null
+        mediaPlayer?.let { mp ->
+            try {
+                if (mp.isPlaying) mp.stop()
+                mp.release()
+            } catch (_: Exception) {}
+            mediaPlayer = null
+        }
     }
 
     private fun updateNotification() {
