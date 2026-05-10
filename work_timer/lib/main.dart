@@ -8,8 +8,18 @@ import 'services/notifications.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tzData.initializeTimeZones();
-  await initNotifications();
-  await requestPermissions();
+
+  // Guard initialization so a single plugin failure doesn't brick the app.
+  try {
+    await initNotifications();
+  } catch (_) {
+    // Notifications unavailable — app still works, just silently.
+  }
+  try {
+    await requestPermissions();
+  } catch (_) {
+    // Permission request failed — user can grant manually later.
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final onboarded = prefs.getBool('onboarded') ?? false;
