@@ -817,7 +817,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildTimerRing() {
     final schedule = _schedule;
-    final phase = (schedule != null && _running && !_sessionComplete)
+    final phase = (schedule != null &&
+            _running &&
+            !_sessionComplete &&
+            _phaseIndex >= 0 &&
+            _phaseIndex < schedule.phases.length)
         ? schedule.phases[_phaseIndex].phase
         : null;
     final color = phase != null ? _phaseColor(phase) : _accent;
@@ -1002,12 +1006,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     // Running: show live progress stats
-    String phasesVal = '$_phaseIndex / ${schedule!.phases.length}';
-    String typeVal = _sessionComplete
-        ? 'Done'
-        : schedule.phases[_phaseIndex].phase.name.split(' ').first;
+    final phaseCount = schedule?.phases.length ?? 0;
+    String phasesVal = '$_phaseIndex / $phaseCount';
+    String typeVal = 'Done';
+    if (!_sessionComplete &&
+        schedule != null &&
+        _phaseIndex >= 0 &&
+        _phaseIndex < phaseCount) {
+      typeVal = schedule.phases[_phaseIndex].phase.name.split(' ').first;
+    }
     String totalVal = '0m';
-    if (!_sessionComplete) {
+    if (!_sessionComplete && schedule != null) {
       final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
       final left = schedule.sessionEnd.difference(now);
       if (!left.isNegative) {
