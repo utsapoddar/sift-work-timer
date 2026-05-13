@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'schedule.dart';
@@ -102,39 +103,76 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
         tz.UTC, adjustedEnd.millisecondsSinceEpoch);
     if (scheduledTime.isBefore(tz.TZDateTime.now(tz.UTC))) continue;
 
-    await _plugin.zonedSchedule(
-      id: i,
-      title: title,
-      body: body,
-      scheduledDate: scheduledTime,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          _androidChannel.id,
-          _androidChannel.name,
-          channelDescription: _androidChannel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
+    try {
+      await _plugin.zonedSchedule(
+        id: i,
+        title: title,
+        body: body,
+        scheduledDate: scheduledTime,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _androidChannel.id,
+            _androidChannel.name,
+            channelDescription: _androidChannel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            // alarm.caf is copied to Library/Sounds at app launch in AppDelegate
+            sound: 'alarm.caf',
+            categoryIdentifier: 'timer_alert',
+            interruptionLevel: InterruptionLevel.timeSensitive,
+          ),
+          macOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            categoryIdentifier: 'timer_alert',
+          ),
         ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          // alarm.caf is copied to Library/Sounds at app launch in AppDelegate
-          sound: 'alarm.caf',
-          categoryIdentifier: 'timer_alert',
-          interruptionLevel: InterruptionLevel.timeSensitive,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } on PlatformException {
+      // Exact-alarm permission may be revoked on some test devices.
+      // Fall back to inexact scheduling so the app doesn't crash.
+      await _plugin.zonedSchedule(
+        id: i,
+        title: title,
+        body: body,
+        scheduledDate: scheduledTime,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _androidChannel.id,
+            _androidChannel.name,
+            channelDescription: _androidChannel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            sound: 'alarm.caf',
+            categoryIdentifier: 'timer_alert',
+            interruptionLevel: InterruptionLevel.timeSensitive,
+          ),
+          macOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            categoryIdentifier: 'timer_alert',
+          ),
         ),
-        macOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          categoryIdentifier: 'timer_alert',
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
   }
 }
 
