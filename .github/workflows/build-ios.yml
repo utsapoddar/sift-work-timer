@@ -16,7 +16,7 @@ jobs:
         working-directory: work_timer
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -75,4 +75,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git add altstore-source.json
           git diff --staged --quiet || git commit -m "chore: update AltStore source to v$VERSION [skip ci]"
-          git pull --rebase && git push
+          git pull --rebase --autostash && git push
