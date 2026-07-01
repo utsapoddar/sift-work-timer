@@ -5,7 +5,7 @@ import WidgetKit
 @available(iOSApplicationExtension 18.0, *)
 struct SiftWidgetControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "com.example.workTimer.SiftWidgetControl") {
+        StaticControlConfiguration(kind: "com.utsapoddar.sift.SiftWidgetControl") {
             ControlWidgetButton(action: SiftWidgetControlIntent()) {
                 Label("Sift", systemImage: "laptopcomputer")
             }
