@@ -64,7 +64,17 @@ jobs:
       - name: Build Android APK (release, signed)
         run: |
           yes | flutter doctor --android-licenses > /dev/null 2>&1 || true
-          flutter build apk --release
+          for attempt in 1 2 3; do
+            if flutter build apk --release; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+            echo "Android build failed; cleaning CMake cache and retrying ($attempt/3)..."
+            rm -rf "$ANDROID_HOME/cmake/3.22.1" "$ANDROID_HOME/.temp" "$ANDROID_SDK_ROOT/cmake/3.22.1" "$ANDROID_SDK_ROOT/.temp" || true
+            sleep 15
+          done
           cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/Sift.apk
 
       - name: Create GitHub Release
