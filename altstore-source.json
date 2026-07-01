@@ -8,13 +8,13 @@
       "bundleIdentifier": "com.example.workTimer",
       "developerName": "Utsa Poddar",
       "subtitle": "Work session timer with automatic breaks",
-      "version": "1.0.11",
-      "versionDate": "2026-07-01T10:24:46Z",
-      "downloadURL": "https://github.com/utsapoddar/sift-work-timer/releases/download/v1.0.11/Sift.ipa",
+      "version": "1.0.12",
+      "versionDate": "2026-07-01T11:00:22Z",
+      "downloadURL": "https://github.com/utsapoddar/sift-work-timer/releases/download/v1.0.12/Sift.ipa",
       "localizedDescription": "Work session timer with automatic break scheduling.",
       "iconURL": "https://raw.githubusercontent.com/utsapoddar/sift-work-timer/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "tintColor": "00ADEF",
-      "size": 12734187
+      "size": 12778056
     }
   ],
   "news": []
