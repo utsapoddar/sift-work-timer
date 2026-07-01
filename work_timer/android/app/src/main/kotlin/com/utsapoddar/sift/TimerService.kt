@@ -315,11 +315,19 @@ class TimerService : Service() {
             this, 1, silenceIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openAppPi = PendingIntent.getActivity(
+            this, 2, openAppIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Sift — $currentPhaseName")
             .setContentText("Timer running")
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
+            .setContentIntent(openAppPi)
             .addAction(0, "Stop", stopPi)
             .addAction(0, "Silence", silencePi)
             .build()
