@@ -16,6 +16,9 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import java.io.File
 
@@ -38,6 +41,7 @@ class TimerService : Service() {
     private var currentPhaseName: String = "Work"
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var vibrator: Vibrator? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -123,6 +127,7 @@ class TimerService : Service() {
         val canScheduleExactAlarms =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
         times.forEachIndexed { i, timeMs ->
+            if (timeMs <= System.currentTimeMillis()) return@forEachIndexed
             val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
                 putExtra(EXTRA_PHASE_NAME, if (i + 1 < names.size) names[i + 1] else "Done")
             }
@@ -206,6 +211,7 @@ class TimerService : Service() {
     private fun playAlarm() {
         stopAlarmSound()
         requestAlarmAudioFocus()
+        startAlarmVibration()
         val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val ringtonePath = prefs.getString("flutter.ringtone_path", null)
 
@@ -252,6 +258,7 @@ class TimerService : Service() {
                     if (mediaPlayer == mp) {
                         try { mp.release() } catch (_: Exception) {}
                         mediaPlayer = null
+                        stopAlarmVibration()
                     }
                 }
                 start()
@@ -267,6 +274,29 @@ class TimerService : Service() {
             } catch (_: Exception) {}
             mediaPlayer = null
         }
+        stopAlarmVibration()
+    }
+
+    private fun startAlarmVibration() {
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            manager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        val pattern = longArrayOf(0, 700, 700)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, 0)
+        }
+    }
+
+    private fun stopAlarmVibration() {
+        try { vibrator?.cancel() } catch (_: Exception) {}
+        vibrator = null
     }
 
     private fun updateNotification() {

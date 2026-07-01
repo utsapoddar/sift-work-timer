@@ -630,6 +630,8 @@ class _HomeScreenState extends State<HomeScreen>
       _pauseStart = DateTime.now();
     });
     unawaited(_persistActiveSession());
+    unawaited(cancelAll());
+    unawaited(stopTimerService());
     final schedule = _schedule;
     if (schedule != null && _phaseIndex < schedule.phases.length) {
       final phase = schedule.phases[_phaseIndex];
@@ -656,6 +658,15 @@ class _HomeScreenState extends State<HomeScreen>
       _pauseStart = null;
     });
     unawaited(_persistActiveSession());
+    if (schedule != null) {
+      unawaited(scheduleAll(schedule, offsetMs: _totalPausedMs));
+      unawaited(
+        startTimerService(
+          phaseNames: schedule.phases.map((p) => p.phase.name).toList(),
+          phaseEndTimes: shiftedPhaseEndTimes(schedule, _totalPausedMs),
+        ),
+      );
+    }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
     if (schedule != null && _phaseIndex < schedule.phases.length) {

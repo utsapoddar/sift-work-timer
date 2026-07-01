@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+import 'alarm_vibration.dart';
 
 final _player = AudioPlayer();
+StreamSubscription<void>? _alarmCompleteSub;
 
 /// Emits when the alarm finishes playing naturally.
 Stream<void> get onAlarmComplete => _player.onPlayerComplete;
@@ -9,9 +12,17 @@ Stream<void> get onAlarmComplete => _player.onPlayerComplete;
 /// Custom ringtone path set by the user. Null = use bundled alarm.mp3.
 String? customRingtonePath;
 
+void _ensureVibrationStopsOnCompletion() {
+  _alarmCompleteSub ??= _player.onPlayerComplete.listen((_) {
+    stopAlarmVibration();
+  });
+}
+
 Future<void> playAlarm() async {
+  _ensureVibrationStopsOnCompletion();
   try {
     await _player.stop();
+    stopAlarmVibration();
     if (Platform.isAndroid) {
       await _player.setAudioContext(
         AudioContext(
@@ -36,17 +47,21 @@ Future<void> playAlarm() async {
     final custom = customRingtonePath;
     if (custom != null && custom.isNotEmpty && File(custom).existsSync()) {
       await _player.play(DeviceFileSource(custom));
+      startAlarmVibration();
     } else {
       await _player.play(AssetSource('alarm.mp3'));
+      startAlarmVibration();
     }
   } catch (_) {
     try {
       await _player.play(AssetSource('alarm.wav'));
+      startAlarmVibration();
     } catch (_) {}
   }
 }
 
 Future<void> stopAlarm() async {
+  stopAlarmVibration();
   try {
     await _player.stop();
   } catch (_) {}

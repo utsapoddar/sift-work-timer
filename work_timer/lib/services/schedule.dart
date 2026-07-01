@@ -170,3 +170,8 @@ class Schedule {
     return phases.length;
   }
 }
+
+List<DateTime> shiftedPhaseEndTimes(Schedule schedule, int offsetMs) {
+  final offset = Duration(milliseconds: offsetMs);
+  return schedule.phases.map((p) => p.endTime.add(offset)).toList();
+}
