@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/schedule.dart';
 import '../services/audio.dart';
 import '../services/battery_optimization.dart' as battery_optimization;
+import '../services/durable_stats.dart';
 import '../services/milestones.dart';
 import '../services/live_activity.dart';
 import '../services/notifications.dart';
@@ -50,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen>
   int _totalSessions = 0;
   int _streakDays = 0;
   Milestone? _pendingMilestone;
+  final DurableStats _durableStats = DurableStats();
 
   static const _prefKeyRingtone = 'ringtone_path';
   static const _prefKeySessions = 'total_sessions';
@@ -136,7 +138,28 @@ class _HomeScreenState extends State<HomeScreen>
 
     var sessions = prefs.getInt(_prefKeySessions) ?? 0;
     var streak = prefs.getInt(_prefKeyStreakDays) ?? 0;
-    final lastDateStr = prefs.getString(_prefKeyStreakDate);
+    var lastDateStr = prefs.getString(_prefKeyStreakDate);
+
+    final resolved = resolveStats(
+      PrefsStats(
+        streakDays: streak,
+        streakDate: lastDateStr,
+        totalSessions: sessions,
+      ),
+      await _durableStats.readStats(),
+    );
+    if (resolved.source == StatsSource.keychain) {
+      sessions = resolved.stats.totalSessions;
+      streak = resolved.stats.streakDays;
+      lastDateStr = resolved.stats.streakDate;
+      await prefs.setInt(_prefKeySessions, sessions);
+      await prefs.setInt(_prefKeyStreakDays, streak);
+      if (lastDateStr == null) {
+        await prefs.remove(_prefKeyStreakDate);
+      } else {
+        await prefs.setString(_prefKeyStreakDate, lastDateStr);
+      }
+    }
 
     // Silently break streak if more than 1 day has passed since last qualifying session
     if (lastDateStr != null && streak > 0) {
@@ -145,6 +168,11 @@ class _HomeScreenState extends State<HomeScreen>
         streak = 0;
         await prefs.setInt(_prefKeyStreakDays, 0);
         await prefs.remove(_prefKeyStreakDate);
+        await _durableStats.writeStats(
+          streakDays: 0,
+          streakDate: null,
+          totalSessions: sessions,
+        );
       } else {
         final today = DateTime.now();
         final diff = DateTime(
@@ -156,6 +184,11 @@ class _HomeScreenState extends State<HomeScreen>
           streak = 0;
           await prefs.setInt(_prefKeyStreakDays, 0);
           await prefs.remove(_prefKeyStreakDate);
+          await _durableStats.writeStats(
+            streakDays: 0,
+            streakDate: null,
+            totalSessions: sessions,
+          );
         }
       }
     }
@@ -415,6 +448,11 @@ class _HomeScreenState extends State<HomeScreen>
     // Always count total sessions
     final newTotal = _totalSessions + 1;
     await prefs.setInt(_prefKeySessions, newTotal);
+    await _durableStats.writeStats(
+      streakDays: _streakDays,
+      streakDate: prefs.getString(_prefKeyStreakDate),
+      totalSessions: newTotal,
+    );
     if (mounted) setState(() => _totalSessions = newTotal);
 
     // Only update streak for 8-hour+ sessions
@@ -443,6 +481,11 @@ class _HomeScreenState extends State<HomeScreen>
 
       await prefs.setInt(_prefKeyStreakDays, newStreak);
       await prefs.setString(_prefKeyStreakDate, todayStr);
+      await _durableStats.writeStats(
+        streakDays: newStreak,
+        streakDate: todayStr,
+        totalSessions: newTotal,
+      );
 
       // Detect newly crossed milestone
       final newMilestone = detectNewMilestone(oldStreak, newStreak);
