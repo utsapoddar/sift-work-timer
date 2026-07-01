@@ -61,13 +61,17 @@ Future<void> endLiveActivity() async {
 /// Start silent background audio loop — keeps app alive so alarm fires even on silent.
 Future<void> startTimerAudio() async {
   if (!Platform.isIOS) return;
-  try { await _channel.invokeMethod('startTimerAudio'); } catch (_) {}
+  try {
+    await _channel.invokeMethod('startTimerAudio');
+  } catch (_) {}
 }
 
 /// Stop the background audio loop.
 Future<void> stopTimerAudio() async {
   if (!Platform.isIOS) return;
-  try { await _channel.invokeMethod('stopTimerAudio'); } catch (_) {}
+  try {
+    await _channel.invokeMethod('stopTimerAudio');
+  } catch (_) {}
 }
 
 /// Start Android foreground service and schedule exact alarms at each phase boundary.
@@ -79,7 +83,9 @@ Future<void> startTimerService({
   try {
     await _channel.invokeMethod('startTimerService', {
       'phaseNames': phaseNames,
-      'phaseEndTimes': phaseEndTimes.map((t) => t.millisecondsSinceEpoch).toList(),
+      'phaseEndTimes': phaseEndTimes
+          .map((t) => t.millisecondsSinceEpoch)
+          .toList(),
     });
   } catch (_) {}
 }
@@ -87,13 +93,17 @@ Future<void> startTimerService({
 /// Stop the Android foreground service.
 Future<void> stopTimerService() async {
   if (!Platform.isAndroid) return;
-  try { await _channel.invokeMethod('stopTimerService'); } catch (_) {}
+  try {
+    await _channel.invokeMethod('stopTimerService');
+  } catch (_) {}
 }
 
 /// Silence the alarm sound in the Android foreground service without stopping the timer.
 Future<void> silenceTimerService() async {
   if (!Platform.isAndroid) return;
-  try { await _channel.invokeMethod('silenceTimerService'); } catch (_) {}
+  try {
+    await _channel.invokeMethod('silenceTimerService');
+  } catch (_) {}
 }
 
 /// Returns the picked file path, or null if cancelled.

@@ -49,12 +49,17 @@ class MilestoneScreen extends StatelessWidget {
                     height: 34,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.04),
+                      color: Colors.white.withValues(alpha: 0.04),
                       border: Border.all(
-                          color: Colors.white.withOpacity(0.08), width: 1),
+                        color: Colors.white.withValues(alpha: 0.08),
+                        width: 1,
+                      ),
                     ),
-                    child: const Icon(Icons.close_rounded,
-                        size: 16, color: Color(0xFF666666)),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: Color(0xFF666666),
+                    ),
                   ),
                 ),
               ),
@@ -68,18 +73,24 @@ class MilestoneScreen extends StatelessWidget {
                   height: 90,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: c.withOpacity(0.1),
-                    border: Border.all(color: c.withOpacity(0.35), width: 2),
+                    color: c.withValues(alpha: 0.1),
+                    border: Border.all(
+                      color: c.withValues(alpha: 0.35),
+                      width: 2,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                          color: c.withOpacity(0.2),
-                          blurRadius: 40,
-                          spreadRadius: 8),
+                        color: c.withValues(alpha: 0.2),
+                        blurRadius: 40,
+                        spreadRadius: 8,
+                      ),
                     ],
                   ),
                   child: Center(
-                    child: Text(milestone.icon,
-                        style: const TextStyle(fontSize: 40)),
+                    child: Text(
+                      milestone.icon,
+                      style: const TextStyle(fontSize: 40),
+                    ),
                   ),
                 ),
               ),
@@ -89,17 +100,22 @@ class MilestoneScreen extends StatelessWidget {
               // Day label
               Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: c.withOpacity(0.1),
+                    color: c.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: c.withOpacity(0.3)),
+                    border: Border.all(color: c.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     'Day $streakDays',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 13, fontWeight: FontWeight.w500, color: c),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: c,
+                    ),
                   ),
                 ),
               ),
@@ -109,9 +125,7 @@ class MilestoneScreen extends StatelessWidget {
               // Milestone title
               Center(
                 child: Text(
-                  _isLast
-                      ? 'You\'ve done it.'
-                      : 'Congratulations.',
+                  _isLast ? 'You\'ve done it.' : 'Congratulations.',
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
@@ -144,9 +158,9 @@ class MilestoneScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: c.withOpacity(0.06),
+                  color: c.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: c.withOpacity(0.18)),
+                  border: Border.all(color: c.withValues(alpha: 0.18)),
                 ),
                 child: Text(
                   _isLast
@@ -154,7 +168,7 @@ class MilestoneScreen extends StatelessWidget {
                       : milestone.sub,
                   style: GoogleFonts.outfit(
                     fontSize: 15,
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     height: 1.55,
                   ),
                 ),
@@ -167,7 +181,7 @@ class MilestoneScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.025),
+                  color: Colors.white.withValues(alpha: 0.025),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _border),
                 ),
@@ -199,9 +213,9 @@ class MilestoneScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: c.withOpacity(0.06),
+                    color: c.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: c.withOpacity(0.25)),
+                    border: Border.all(color: c.withValues(alpha: 0.25)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,7 +234,7 @@ class MilestoneScreen extends StatelessWidget {
                         'I built this app hoping someone would reach this. That someone is you.\n\nI would genuinely love to hear what kept you going, what almost stopped you, and how this changed your work.',
                         style: GoogleFonts.outfit(
                           fontSize: 14,
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.8),
                           height: 1.65,
                         ),
                       ),
@@ -234,7 +248,7 @@ class MilestoneScreen extends StatelessWidget {
                             color: c,
                             fontWeight: FontWeight.w500,
                             decoration: TextDecoration.underline,
-                            decorationColor: c.withOpacity(0.5),
+                            decorationColor: c.withValues(alpha: 0.5),
                           ),
                         ),
                       ),
@@ -264,14 +278,16 @@ class MilestoneScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.025),
+                    color: Colors.white.withValues(alpha: 0.025),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: _border),
                   ),
                   child: Row(
                     children: [
-                      Text(nextMilestone!.icon,
-                          style: const TextStyle(fontSize: 24)),
+                      Text(
+                        nextMilestone!.icon,
+                        style: const TextStyle(fontSize: 24),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -287,7 +303,7 @@ class MilestoneScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              nextMilestone!.rarity + ' of people reach this',
+                              '${nextMilestone!.rarity} of people reach this',
                               style: GoogleFonts.outfit(
                                 fontSize: 11,
                                 color: const Color(0xFF555555),
@@ -316,7 +332,7 @@ class MilestoneScreen extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: _progressToNext,
                     minHeight: 4,
-                    backgroundColor: Colors.white.withOpacity(0.05),
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
                     valueColor: AlwaysStoppedAnimation(c),
                   ),
                 ),
@@ -329,7 +345,7 @@ class MilestoneScreen extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     height: 1.55,
                   ),
                 ),
@@ -347,15 +363,17 @@ class MilestoneScreen extends StatelessWidget {
   }
 
   Widget _divider(Color c) => Container(
-        height: 1,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [
-            Colors.transparent,
-            c.withOpacity(0.25),
-            Colors.transparent,
-          ]),
-        ),
-      );
+    height: 1,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          Colors.transparent,
+          c.withValues(alpha: 0.25),
+          Colors.transparent,
+        ],
+      ),
+    ),
+  );
 
   Widget _ctaButton(BuildContext context, Color c, {required bool isLast}) {
     return SizedBox(
@@ -364,13 +382,14 @@ class MilestoneScreen extends StatelessWidget {
       child: ElevatedButton(
         onPressed: () => Navigator.pop(context),
         style: ElevatedButton.styleFrom(
-          backgroundColor: isLast ? Colors.white.withOpacity(0.06) : c,
+          backgroundColor: isLast ? Colors.white.withValues(alpha: 0.06) : c,
           foregroundColor: isLast ? Colors.white : Colors.black,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: isLast
-                  ? BorderSide(color: Colors.white.withOpacity(0.1))
-                  : BorderSide.none),
+            borderRadius: BorderRadius.circular(14),
+            side: isLast
+                ? BorderSide(color: Colors.white.withValues(alpha: 0.1))
+                : BorderSide.none,
+          ),
           elevation: 0,
         ),
         child: Row(

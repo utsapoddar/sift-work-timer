@@ -28,8 +28,11 @@ class OnboardingScreen extends StatelessWidget {
                 height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _accent.withOpacity(0.1),
-                  border: Border.all(color: _accent.withOpacity(0.3), width: 1.5),
+                  color: _accent.withValues(alpha: 0.1),
+                  border: Border.all(
+                    color: _accent.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
                 ),
                 child: const Center(
                   child: Text('🔥', style: TextStyle(fontSize: 28)),
@@ -87,11 +90,10 @@ class OnboardingScreen extends StatelessWidget {
                       Navigator.pushReplacement(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (_, __, ___) => const HomeScreen(),
-                          transitionsBuilder: (_, anim, __, child) =>
+                          pageBuilder: (_, _, _) => const HomeScreen(),
+                          transitionsBuilder: (_, anim, _, child) =>
                               FadeTransition(opacity: anim, child: child),
-                          transitionDuration:
-                              const Duration(milliseconds: 500),
+                          transitionDuration: const Duration(milliseconds: 500),
                         ),
                       );
                     }
@@ -100,7 +102,8 @@ class OnboardingScreen extends StatelessWidget {
                     backgroundColor: _accent,
                     foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                   child: Row(

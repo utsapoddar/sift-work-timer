@@ -13,21 +13,25 @@ Future<void> playAlarm() async {
   try {
     await _player.stop();
     if (Platform.isAndroid) {
-      await _player.setAudioContext(AudioContext(
-        android: const AudioContextAndroid(
-          usageType: AndroidUsageType.alarm,
-          audioFocus: AndroidAudioFocus.gainTransientExclusive,
-          isSpeakerphoneOn: false,
-          stayAwake: false,
+      await _player.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            usageType: AndroidUsageType.alarm,
+            audioFocus: AndroidAudioFocus.gainTransientExclusive,
+            isSpeakerphoneOn: false,
+            stayAwake: false,
+          ),
         ),
-      ));
+      );
     } else if (Platform.isIOS) {
-      await _player.setAudioContext(AudioContext(
-        iOS: AudioContextIOS(
-          category: AVAudioSessionCategory.playback,
-          options: const {},
+      await _player.setAudioContext(
+        AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: const {},
+          ),
         ),
-      ));
+      );
     }
     final custom = customRingtonePath;
     if (custom != null && custom.isNotEmpty && File(custom).existsSync()) {

@@ -120,26 +120,8 @@ class TimerService : Service() {
 
     private fun scheduleAlarms(names: Array<String>, times: LongArray) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        // On Android 12+ the user can revoke exact-alarm permission from Settings.
-        // setAlarmClock falls back to inexact delivery if the permission is missing —
-        // log a notification so the user knows to re-grant it.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID + 1,
-                NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_notification)
-                    .setContentTitle("Sift needs permission")
-                    .setContentText("Allow exact alarms so the timer rings on time. Tap to open settings.")
-                    .setContentIntent(PendingIntent.getActivity(
-                        this, 99,
-                        android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM),
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                    ))
-                    .setAutoCancel(true)
-                    .build()
-            )
-            return
-        }
+        val canScheduleExactAlarms =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
         times.forEachIndexed { i, timeMs ->
             val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
                 putExtra(EXTRA_PHASE_NAME, if (i + 1 < names.size) names[i + 1] else "Done")
@@ -150,7 +132,7 @@ class TimerService : Service() {
             )
             // setAlarmClock has highest priority — OEMs display it in the status bar and
             // virtually never suppress it, unlike setExactAndAllowWhileIdle on aggressive OEMs.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && canScheduleExactAlarms) {
                 val showIntent = PendingIntent.getActivity(
                     this, i + 100,
                     Intent(this, MainActivity::class.java).apply {
@@ -159,8 +141,10 @@ class TimerService : Service() {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
                 alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(timeMs, showIntent), pi)
-            } else {
+            } else if (canScheduleExactAlarms) {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeMs, pi)
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, timeMs, pi)
             }
         }
     }

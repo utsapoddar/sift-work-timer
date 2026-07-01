@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/schedule.dart';
 import '../services/audio.dart';
+import '../services/battery_optimization.dart' as battery_optimization;
 import '../services/milestones.dart';
 import '../services/live_activity.dart';
 import '../services/notifications.dart';
@@ -18,7 +20,6 @@ const _accentDim = Color(0x1AF97316);
 const _bg = Color(0xFF0A0A0A);
 const _surface = Color(0xFF141414);
 const _border = Color(0xFF252525);
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -54,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen>
   static const _prefKeySessions = 'total_sessions';
   static const _prefKeyStreakDays = 'streak_days';
   static const _prefKeyStreakDate = 'streak_date';
+  static const _prefKeyActiveSession = 'active_session';
 
   @override
   void initState() {
@@ -145,9 +147,11 @@ class _HomeScreenState extends State<HomeScreen>
         await prefs.remove(_prefKeyStreakDate);
       } else {
         final today = DateTime.now();
-        final diff = DateTime(today.year, today.month, today.day)
-            .difference(DateTime(lastDay.year, lastDay.month, lastDay.day))
-            .inDays;
+        final diff = DateTime(
+          today.year,
+          today.month,
+          today.day,
+        ).difference(DateTime(lastDay.year, lastDay.month, lastDay.day)).inDays;
         if (diff > 1) {
           streak = 0;
           await prefs.setInt(_prefKeyStreakDays, 0);
@@ -161,6 +165,104 @@ class _HomeScreenState extends State<HomeScreen>
       _totalSessions = sessions;
       _streakDays = streak;
     });
+
+    await _restoreActiveSession(prefs);
+  }
+
+  Future<void> _persistActiveSession() async {
+    final schedule = _schedule;
+    if (schedule == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _prefKeyActiveSession,
+      jsonEncode({
+        'schedule': schedule.toJson(),
+        'running': _running,
+        'paused': _paused,
+        'pauseStartMs': _pauseStart?.millisecondsSinceEpoch,
+        'totalPausedMs': _totalPausedMs,
+      }),
+    );
+  }
+
+  Future<void> _clearActiveSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefKeyActiveSession);
+  }
+
+  Future<void> _restoreActiveSession(SharedPreferences prefs) async {
+    final raw = prefs.getString(_prefKeyActiveSession);
+    if (raw == null) return;
+
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final running = data['running'] as bool? ?? true;
+      if (!running) {
+        await prefs.remove(_prefKeyActiveSession);
+        return;
+      }
+      final schedule = Schedule.fromJson(
+        data['schedule'] as Map<String, dynamic>,
+      );
+      final paused = data['paused'] as bool? ?? false;
+      var totalPausedMs = (data['totalPausedMs'] as num?)?.toInt() ?? 0;
+      final pauseStartMs = (data['pauseStartMs'] as num?)?.toInt();
+      if (paused && pauseStartMs != null) {
+        totalPausedMs += DateTime.now()
+            .difference(DateTime.fromMillisecondsSinceEpoch(pauseStartMs))
+            .inMilliseconds;
+      }
+
+      final now = DateTime.now().subtract(
+        Duration(milliseconds: totalPausedMs),
+      );
+      final idx = schedule.currentPhaseIndex(now);
+
+      if (!mounted) return;
+      if (idx >= schedule.phases.length) {
+        await _clearActiveSession();
+        setState(() {
+          _schedule = schedule;
+          _totalMinutes = schedule.totalMinutes;
+          _running = true;
+          _paused = false;
+          _pauseStart = null;
+          _totalPausedMs = totalPausedMs;
+          _phaseIndex = schedule.phases.length;
+          _remaining = Duration.zero;
+          _phaseProgress = 1.0;
+          _sessionComplete = true;
+          _lastPhaseIndex = schedule.phases.length - 1;
+        });
+        unawaited(_onSessionComplete());
+        return;
+      }
+
+      final phase = schedule.phases[idx];
+      setState(() {
+        _schedule = schedule;
+        _totalMinutes = schedule.totalMinutes;
+        _running = true;
+        _paused = paused;
+        _pauseStart = paused ? DateTime.now() : null;
+        _totalPausedMs = totalPausedMs;
+        _phaseIndex = idx;
+        _remaining = phase.remaining(now);
+        _phaseProgress = phase.progress(now);
+        _sessionComplete = false;
+        _lastPhaseIndex = idx;
+      });
+
+      if (paused) {
+        unawaited(_persistActiveSession());
+      } else {
+        _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+        _tick();
+      }
+    } catch (_) {
+      await prefs.remove(_prefKeyActiveSession);
+    }
   }
 
   Future<void> _saveRingtone(String? path) async {
@@ -174,6 +276,52 @@ class _HomeScreenState extends State<HomeScreen>
     customRingtonePath = path;
   }
 
+  Future<void> _maybeShowBatteryOptimizationDialog() async {
+    if (!await battery_optimization.shouldPromptForBatteryOptimization()) {
+      return;
+    }
+    await battery_optimization.markBatteryOptimizationPrompted();
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _border),
+        ),
+        title: const Text(
+          'Allow reliable alarms',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        content: const Text(
+          'To make sure your timer alarm goes off reliably, allow Sift to ignore battery optimization.',
+          style: TextStyle(color: Color(0xFF888888), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Not now',
+              style: TextStyle(color: Color(0xFF888888)),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              unawaited(battery_optimization.openBatteryOptimizationSettings());
+            },
+            child: const Text(
+              'Open Settings',
+              style: TextStyle(color: _accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showSettings() async {
     final ringtonePathSnapshot = _ringtonePath;
     await showDialog(
@@ -181,26 +329,31 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: _surface,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: _border)),
-        title: const Text('Settings',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _border),
+        ),
+        title: const Text(
+          'Settings',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Ringtone',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: _accent,
-                    letterSpacing: 1.2)),
+            const Text(
+              'Ringtone',
+              style: TextStyle(
+                fontSize: 12,
+                color: _accent,
+                letterSpacing: 1.2,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               ringtonePathSnapshot != null
                   ? ringtonePathSnapshot.split('/').last
                   : 'Default alarm tone',
-              style:
-                  const TextStyle(color: Color(0xFF888888), fontSize: 13),
+              style: const TextStyle(color: Color(0xFF888888), fontSize: 13),
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 14),
@@ -245,8 +398,7 @@ class _HomeScreenState extends State<HomeScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Done', style: TextStyle(color: _accent)),
+            child: const Text('Done', style: TextStyle(color: _accent)),
           ),
         ],
       ),
@@ -258,6 +410,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _onSessionComplete() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefKeyActiveSession);
 
     // Always count total sessions
     final newTotal = _totalSessions + 1;
@@ -309,9 +462,11 @@ class _HomeScreenState extends State<HomeScreen>
     final idx = schedule.currentPhaseIndex(now);
     if (idx >= schedule.phases.length) return;
     // Wall-clock moment this phase ends (accounts for any paused time)
-    final phaseEndWall = schedule.phases[idx].endTime
-        .add(Duration(milliseconds: _totalPausedMs));
-    final delay = phaseEndWall.difference(DateTime.now()) + const Duration(seconds: 1);
+    final phaseEndWall = schedule.phases[idx].endTime.add(
+      Duration(milliseconds: _totalPausedMs),
+    );
+    final delay =
+        phaseEndWall.difference(DateTime.now()) + const Duration(seconds: 1);
     _ticker = Timer(delay.isNegative ? Duration.zero : delay, () {
       _tick();
       if (_running && !_paused) _scheduleBackgroundWakeup();
@@ -324,18 +479,26 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _schedule = schedule;
       _running = true;
+      _paused = false;
+      _pauseStart = null;
+      _totalPausedMs = 0;
+      _sessionComplete = false;
       _lastPhaseIndex = -1;
     });
+    await _persistActiveSession();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
+    unawaited(_maybeShowBatteryOptimizationDialog());
     // Schedule background notifications for every phase boundary so alarms
     // fire even if iOS kills the silent audio loop or Android kills the service.
     unawaited(scheduleAll(schedule));
     unawaited(startTimerAudio());
-    unawaited(startTimerService(
-      phaseNames: schedule.phases.map((p) => p.phase.name).toList(),
-      phaseEndTimes: schedule.phases.map((p) => p.endTime).toList(),
-    ));
+    unawaited(
+      startTimerService(
+        phaseNames: schedule.phases.map((p) => p.phase.name).toList(),
+        phaseEndTimes: schedule.phases.map((p) => p.endTime).toList(),
+      ),
+    );
     final phase = schedule.phases.first;
     final laErr = await startLiveActivity(
       phaseName: phase.phase.name,
@@ -346,7 +509,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
     if (laErr != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Live Activity: $laErr'), duration: const Duration(seconds: 6)));
+        SnackBar(
+          content: Text('Live Activity: $laErr'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
     }
   }
 
@@ -371,6 +538,7 @@ class _HomeScreenState extends State<HomeScreen>
     final pending = _pendingMilestone;
     final streakSnapshot = _streakDays;
 
+    await _clearActiveSession();
     _ticker?.cancel();
     _ticker = null;
     await stopAlarm();
@@ -398,12 +566,12 @@ class _HomeScreenState extends State<HomeScreen>
       await Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => MilestoneScreen(
+          pageBuilder: (_, _, _) => MilestoneScreen(
             milestone: pending,
             streakDays: streakSnapshot,
             nextMilestone: next,
           ),
-          transitionsBuilder: (_, anim, __, child) =>
+          transitionsBuilder: (_, anim, _, child) =>
               FadeTransition(opacity: anim, child: child),
           transitionDuration: const Duration(milliseconds: 400),
         ),
@@ -418,6 +586,7 @@ class _HomeScreenState extends State<HomeScreen>
       _paused = true;
       _pauseStart = DateTime.now();
     });
+    unawaited(_persistActiveSession());
     final schedule = _schedule;
     if (schedule != null && _phaseIndex < schedule.phases.length) {
       final phase = schedule.phases[_phaseIndex];
@@ -443,6 +612,7 @@ class _HomeScreenState extends State<HomeScreen>
       _paused = false;
       _pauseStart = null;
     });
+    unawaited(_persistActiveSession());
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _tick();
     if (schedule != null && _phaseIndex < schedule.phases.length) {
@@ -463,14 +633,13 @@ class _HomeScreenState extends State<HomeScreen>
     final schedule = _schedule;
     if (schedule == null) return;
 
-    final now =
-        DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
+    final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
     final idx = schedule.currentPhaseIndex(now);
 
     if (idx >= schedule.phases.length) {
       _ticker?.cancel();
       _ticker = null;
-      _onSessionComplete();
+      unawaited(_onSessionComplete());
       setState(() => _sessionComplete = true);
       unawaited(cancelNotification(schedule.phases.length - 1));
       _triggerAlarm();
@@ -535,10 +704,12 @@ class _HomeScreenState extends State<HomeScreen>
 
     int selected = _totalMinutes;
     bool isCustom = !presets.containsKey(_totalMinutes);
-    final hoursCtrl =
-        TextEditingController(text: isCustom ? '${_totalMinutes ~/ 60}' : '');
-    final minsCtrl =
-        TextEditingController(text: isCustom ? '${_totalMinutes % 60}' : '');
+    final hoursCtrl = TextEditingController(
+      text: isCustom ? '${_totalMinutes ~/ 60}' : '',
+    );
+    final minsCtrl = TextEditingController(
+      text: isCustom ? '${_totalMinutes % 60}' : '',
+    );
 
     await showDialog(
       context: context,
@@ -546,98 +717,126 @@ class _HomeScreenState extends State<HomeScreen>
         builder: (ctx, setLocal) => AlertDialog(
           backgroundColor: _surface,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: _border)),
-          title: const Text('Set Work Hours',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: _border),
+          ),
+          title: const Text(
+            'Set Work Hours',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
           content: SizedBox(
             width: 320,
             child: SingleChildScrollView(
-              child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ...presets.entries.map((e) => RadioListTile<int>(
-                      value: e.key,
-                      groupValue: isCustom ? -1 : selected,
-                      activeColor: _accent,
-                      title: Row(
-                        children: [
-                          Text(e.value,
-                              style: const TextStyle(color: Colors.white)),
-                          if (e.key == 9 * 60) ...[
-                            const SizedBox(width: 8),
-                            const Text('recommended',
-                                style: TextStyle(
-                                    fontSize: 11, color: _accent)),
+              child: RadioGroup<int>(
+                groupValue: isCustom ? -1 : selected,
+                onChanged: (v) {
+                  if (v == null) {
+                    return;
+                  }
+                  setLocal(() {
+                    if (v == -1) {
+                      isCustom = true;
+                    } else {
+                      selected = v;
+                      isCustom = false;
+                    }
+                  });
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...presets.entries.map(
+                      (e) => RadioListTile<int>(
+                        value: e.key,
+                        activeColor: _accent,
+                        title: Row(
+                          children: [
+                            Text(
+                              e.value,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            if (e.key == 9 * 60) ...[
+                              const SizedBox(width: 8),
+                              const Text(
+                                'recommended',
+                                style: TextStyle(fontSize: 11, color: _accent),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                      onChanged: (v) => setLocal(() {
-                        selected = v!;
-                        isCustom = false;
-                      }),
-                    )),
-                RadioListTile<int>(
-                  value: -1,
-                  groupValue: isCustom ? -1 : selected,
-                  activeColor: _accent,
-                  title: const Text('Custom Duration',
-                      style: TextStyle(color: Colors.white)),
-                  onChanged: (_) => setLocal(() => isCustom = true),
-                ),
-                if (isCustom)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16, top: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: hoursCtrl,
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
-                              labelText: 'Hours',
-                              labelStyle: TextStyle(color: Color(0xFF888888)),
-                              border: OutlineInputBorder(),
-                              enabledBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: _border)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: _accent)),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: minsCtrl,
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
-                              labelText: 'Minutes',
-                              labelStyle: TextStyle(color: Color(0xFF888888)),
-                              border: OutlineInputBorder(),
-                              enabledBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: _border)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: _accent)),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
-                  ),
-              ],
-            ),
+                    RadioListTile<int>(
+                      value: -1,
+                      activeColor: _accent,
+                      title: const Text(
+                        'Custom Duration',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    if (isCustom)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16, top: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: hoursCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'Hours',
+                                  labelStyle: TextStyle(
+                                    color: Color(0xFF888888),
+                                  ),
+                                  border: OutlineInputBorder(),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: _border),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: _accent),
+                                  ),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                controller: minsCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'Minutes',
+                                  labelStyle: TextStyle(
+                                    color: Color(0xFF888888),
+                                  ),
+                                  border: OutlineInputBorder(),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: _border),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: _accent),
+                                  ),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Color(0xFF888888))),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF888888)),
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -710,21 +909,21 @@ class _HomeScreenState extends State<HomeScreen>
         const Spacer(),
         if (_running)
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
               color: _accentDim,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _accent.withOpacity(0.3)),
+              border: Border.all(color: _accent.withValues(alpha: 0.3)),
             ),
             child: Text(
               _paused
                   ? '${_formatSessionLabel(_totalMinutes)}  ·  Paused'
                   : _formatSessionLabel(_totalMinutes),
               style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  color: _accent,
-                  fontWeight: FontWeight.w500),
+                fontSize: 12,
+                color: _accent,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         const SizedBox(width: 8),
@@ -735,12 +934,17 @@ class _HomeScreenState extends State<HomeScreen>
             height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.04),
+              color: Colors.white.withValues(alpha: 0.04),
               border: Border.all(
-                  color: Colors.white.withOpacity(0.09), width: 1.5),
+                color: Colors.white.withValues(alpha: 0.09),
+                width: 1.5,
+              ),
             ),
-            child: const Icon(Icons.settings_outlined,
-                size: 17, color: Color(0xFF777777)),
+            child: const Icon(
+              Icons.settings_outlined,
+              size: 17,
+              color: Color(0xFF777777),
+            ),
           ),
         ),
       ],
@@ -767,12 +971,16 @@ class _HomeScreenState extends State<HomeScreen>
               child: _presetChip(
                 label: e.value,
                 selected: selected,
-                onTap: _running ? null : () => setState(() => _totalMinutes = e.key),
+                onTap: _running
+                    ? null
+                    : () => setState(() => _totalMinutes = e.key),
               ),
             );
           }),
           _presetChip(
-            label: isCustom ? '${_formatSessionLabel(_totalMinutes)} ✎' : 'Custom',
+            label: isCustom
+                ? '${_formatSessionLabel(_totalMinutes)} ✎'
+                : 'Custom',
             selected: isCustom,
             onTap: _running ? null : _showDurationPicker,
           ),
@@ -790,15 +998,12 @@ class _HomeScreenState extends State<HomeScreen>
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? _accentDim : Colors.white.withOpacity(0.03),
+          color: selected ? _accentDim : Colors.white.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? _accent
-                : Colors.white.withOpacity(0.08),
+            color: selected ? _accent : Colors.white.withValues(alpha: 0.08),
             width: 1.5,
           ),
         ),
@@ -807,8 +1012,7 @@ class _HomeScreenState extends State<HomeScreen>
           style: GoogleFonts.outfit(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color:
-                selected ? _accent : const Color(0xFF777777),
+            color: selected ? _accent : const Color(0xFF777777),
           ),
         ),
       ),
@@ -817,7 +1021,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildTimerRing() {
     final schedule = _schedule;
-    final phase = (schedule != null &&
+    final phase =
+        (schedule != null &&
             _running &&
             !_sessionComplete &&
             _phaseIndex >= 0 &&
@@ -825,8 +1030,7 @@ class _HomeScreenState extends State<HomeScreen>
         ? schedule.phases[_phaseIndex].phase
         : null;
     final color = phase != null ? _phaseColor(phase) : _accent;
-    final progress =
-        _sessionComplete ? 1.0 : (_running ? _phaseProgress : 0.0);
+    final progress = _sessionComplete ? 1.0 : (_running ? _phaseProgress : 0.0);
     final label = _sessionComplete
         ? 'Session Complete'
         : (phase?.name.toUpperCase() ?? 'READY');
@@ -836,7 +1040,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     return AnimatedBuilder(
       animation: _pulseCtrl,
-      builder: (_, __) {
+      builder: (_, _) {
         final glowOpacity = 0.05 + _pulseCtrl.value * 0.07;
         return Center(
           child: SizedBox(
@@ -853,10 +1057,10 @@ class _HomeScreenState extends State<HomeScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(glowOpacity),
+                        color: color.withValues(alpha: glowOpacity),
                         blurRadius: 70,
                         spreadRadius: 20,
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -916,8 +1120,8 @@ class _HomeScreenState extends State<HomeScreen>
           onTap: _sessionComplete
               ? null
               : (_running
-                  ? (_paused ? _resumeSession : _pauseSession)
-                  : _start),
+                    ? (_paused ? _resumeSession : _pauseSession)
+                    : _start),
           size: 70,
           isAccent: true,
         ),
@@ -943,7 +1147,7 @@ class _HomeScreenState extends State<HomeScreen>
   }) {
     final bg = isAccent
         ? _accent
-        : (glowColor ?? Colors.white.withOpacity(0.04));
+        : (glowColor ?? Colors.white.withValues(alpha: 0.04));
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -955,25 +1159,30 @@ class _HomeScreenState extends State<HomeScreen>
           border: isAccent
               ? null
               : Border.all(
-                  color: Colors.white.withOpacity(0.09), width: 1.5),
+                  color: Colors.white.withValues(alpha: 0.09),
+                  width: 1.5,
+                ),
           boxShadow: isAccent
               ? [
                   BoxShadow(
-                      color: _accent.withOpacity(0.45),
-                      blurRadius: 28,
-                      spreadRadius: 0),
+                    color: _accent.withValues(alpha: 0.45),
+                    blurRadius: 28,
+                    spreadRadius: 0,
+                  ),
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6)),
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
                 ]
               : glowColor != null
-                  ? [
-                      BoxShadow(
-                          color: glowColor.withOpacity(0.4),
-                          blurRadius: 18)
-                    ]
-                  : null,
+              ? [
+                  BoxShadow(
+                    color: glowColor.withValues(alpha: 0.4),
+                    blurRadius: 18,
+                  ),
+                ]
+              : null,
         ),
         child: Icon(
           icon,
@@ -981,8 +1190,8 @@ class _HomeScreenState extends State<HomeScreen>
           color: isAccent
               ? Colors.black
               : glowColor != null
-                  ? Colors.white
-                  : const Color(0xFF777777),
+              ? Colors.white
+              : const Color(0xFF777777),
         ),
       ),
     );
@@ -1017,7 +1226,9 @@ class _HomeScreenState extends State<HomeScreen>
     }
     String totalVal = '0m';
     if (!_sessionComplete && schedule != null) {
-      final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
+      final now = DateTime.now().subtract(
+        Duration(milliseconds: _totalPausedMs),
+      );
       final left = schedule.sessionEnd.difference(now);
       if (!left.isNegative) {
         final h = left.inHours;
@@ -1040,10 +1251,9 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _statBox(String label, String value) {
     return Expanded(
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.025),
+          color: Colors.white.withValues(alpha: 0.025),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: _border, width: 1),
         ),
@@ -1080,8 +1290,7 @@ class _HomeScreenState extends State<HomeScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(count, (i) {
         final isPast = _running && i < _phaseIndex;
-        final isCurrent =
-            _running && !_sessionComplete && i == _phaseIndex;
+        final isCurrent = _running && !_sessionComplete && i == _phaseIndex;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3),
           child: AnimatedContainer(
@@ -1092,12 +1301,13 @@ class _HomeScreenState extends State<HomeScreen>
               shape: BoxShape.circle,
               color: (isPast || isCurrent || _sessionComplete)
                   ? _accent
-                  : Colors.white.withOpacity(0.12),
+                  : Colors.white.withValues(alpha: 0.12),
               boxShadow: isCurrent
                   ? [
                       BoxShadow(
-                          color: _accent.withOpacity(0.65),
-                          blurRadius: 8)
+                        color: _accent.withValues(alpha: 0.65),
+                        blurRadius: 8,
+                      ),
                     ]
                   : null,
             ),
@@ -1114,8 +1324,8 @@ class _HomeScreenState extends State<HomeScreen>
     for (int i = 0; i < milestones.length; i++) {
       if (_streakDays >= milestones[i].day) {
         current = milestones[i];
-      } else if (next == null) {
-        next = milestones[i];
+      } else {
+        next ??= milestones[i];
       }
     }
 
@@ -1125,7 +1335,7 @@ class _HomeScreenState extends State<HomeScreen>
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.025),
+          color: Colors.white.withValues(alpha: 0.025),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _border),
         ),
@@ -1136,13 +1346,18 @@ class _HomeScreenState extends State<HomeScreen>
             Text(
               'Start your streak',
               style: GoogleFonts.outfit(
-                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               'Complete a full session to begin your streak.',
               style: GoogleFonts.outfit(
-                  fontSize: 12, color: const Color(0xFF555555)),
+                fontSize: 12,
+                color: const Color(0xFF555555),
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1166,9 +1381,9 @@ class _HomeScreenState extends State<HomeScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.05),
+        color: c.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.withOpacity(0.2)),
+        border: Border.all(color: c.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1182,12 +1397,14 @@ class _HomeScreenState extends State<HomeScreen>
                 height: 46,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: c.withOpacity(0.12),
-                  border: Border.all(color: c.withOpacity(0.35)),
+                  color: c.withValues(alpha: 0.12),
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
                 ),
                 child: Center(
-                  child: Text(current.icon,
-                      style: const TextStyle(fontSize: 22)),
+                  child: Text(
+                    current.icon,
+                    style: const TextStyle(fontSize: 22),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1209,17 +1426,20 @@ class _HomeScreenState extends State<HomeScreen>
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: c.withOpacity(0.15),
+                            color: c.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             'You are here',
                             style: GoogleFonts.outfit(
-                                fontSize: 9,
-                                color: c,
-                                fontWeight: FontWeight.w600),
+                              fontSize: 9,
+                              color: c,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -1228,9 +1448,10 @@ class _HomeScreenState extends State<HomeScreen>
                     Text(
                       current.sub,
                       style: GoogleFonts.outfit(
-                          fontSize: 11.5,
-                          color: const Color(0xFF888888),
-                          height: 1.4),
+                        fontSize: 11.5,
+                        color: const Color(0xFF888888),
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -1242,19 +1463,24 @@ class _HomeScreenState extends State<HomeScreen>
                   Text(
                     '$_streakDays 🔥',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 18, fontWeight: FontWeight.w500, color: c),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: c,
+                    ),
                   ),
                   Text(
                     current.rarity,
                     style: GoogleFonts.outfit(
-                        fontSize: 9,
-                        color: const Color(0xFF555555)),
+                      fontSize: 9,
+                      color: const Color(0xFF555555),
+                    ),
                   ),
                   Text(
                     'still going',
                     style: GoogleFonts.outfit(
-                        fontSize: 9,
-                        color: const Color(0xFF444444)),
+                      fontSize: 9,
+                      color: const Color(0xFF444444),
+                    ),
                   ),
                 ],
               ),
@@ -1263,25 +1489,24 @@ class _HomeScreenState extends State<HomeScreen>
           // Science blurb
           const SizedBox(height: 10),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.05),
+              color: c.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: c.withOpacity(0.1)),
+              border: Border.all(color: c.withValues(alpha: 0.1)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('🧪 ',
-                    style: TextStyle(fontSize: 12)),
+                const Text('🧪 ', style: TextStyle(fontSize: 12)),
                 Expanded(
                   child: Text(
                     current.science,
                     style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        color: const Color(0xFF777777),
-                        height: 1.5),
+                      fontSize: 11,
+                      color: const Color(0xFF777777),
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ],
@@ -1295,7 +1520,7 @@ class _HomeScreenState extends State<HomeScreen>
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 4,
-                backgroundColor: c.withOpacity(0.12),
+                backgroundColor: c.withValues(alpha: 0.12),
                 valueColor: AlwaysStoppedAnimation(c),
               ),
             ),
@@ -1303,7 +1528,9 @@ class _HomeScreenState extends State<HomeScreen>
             Text(
               nextLabel,
               style: GoogleFonts.outfit(
-                  fontSize: 10, color: const Color(0xFF555555)),
+                fontSize: 10,
+                color: const Color(0xFF555555),
+              ),
             ),
           ],
         ],
@@ -1319,17 +1546,15 @@ class _HomeScreenState extends State<HomeScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: subtle
-              ? Colors.transparent
-              : _accentDim,
+          color: subtle ? Colors.transparent : _accentDim,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: subtle
-                  ? Colors.white.withOpacity(0.08)
-                  : _accent.withOpacity(0.4)),
+            color: subtle
+                ? Colors.white.withValues(alpha: 0.08)
+                : _accent.withValues(alpha: 0.4),
+          ),
         ),
         child: Text(
           label,
@@ -1363,7 +1588,7 @@ class _RingPainter extends CustomPainter {
       center,
       radius + 13,
       Paint()
-        ..color = accent.withOpacity(0.12)
+        ..color = accent.withValues(alpha: 0.12)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.6,
       3.0,
@@ -1375,7 +1600,7 @@ class _RingPainter extends CustomPainter {
       center,
       radius,
       Paint()
-        ..color = Colors.white.withOpacity(0.05)
+        ..color = Colors.white.withValues(alpha: 0.05)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 7,
     );
@@ -1391,7 +1616,7 @@ class _RingPainter extends CustomPainter {
       sweep,
       false,
       Paint()
-        ..color = accent.withOpacity(0.28)
+        ..color = accent.withValues(alpha: 0.28)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 13
         ..strokeCap = StrokeCap.round
@@ -1419,7 +1644,7 @@ class _RingPainter extends CustomPainter {
       Offset(dx, dy),
       6,
       Paint()
-        ..color = accent.withOpacity(0.5)
+        ..color = accent.withValues(alpha: 0.5)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
     canvas.drawCircle(Offset(dx, dy), 5, Paint()..color = accent);

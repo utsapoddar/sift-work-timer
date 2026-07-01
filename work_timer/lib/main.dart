@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest_all.dart' as tzData;
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  tzData.initializeTimeZones();
+  tz_data.initializeTimeZones();
 
   // Guard initialization so a single plugin failure doesn't brick the app.
   try {
@@ -37,13 +37,14 @@ class WorkTimerApp extends StatelessWidget {
       title: 'Sift',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFF97316),
-          brightness: Brightness.dark,
-        ).copyWith(
-          surface: const Color(0xFF0A0A0A),
-          surfaceContainerHighest: const Color(0xFF141414),
-        ),
+        colorScheme:
+            ColorScheme.fromSeed(
+              seedColor: const Color(0xFFF97316),
+              brightness: Brightness.dark,
+            ).copyWith(
+              surface: const Color(0xFF0A0A0A),
+              surfaceContainerHighest: const Color(0xFF141414),
+            ),
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         useMaterial3: true,
       ),

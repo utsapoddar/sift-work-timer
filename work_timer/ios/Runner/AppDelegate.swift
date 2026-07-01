@@ -23,7 +23,7 @@ struct SiftActivityAttributes: ActivityAttributes {
   private var filePickResult: FlutterResult?
   private var timerActionChannel: FlutterMethodChannel?
 
-  // Silent keep-alive loop — keeps app alive in background while timer runs
+  // Best-effort silent keep-alive loop for in-app continuity while timer runs.
   private let audioEngine = AVAudioEngine()
   private let silentNode = AVAudioPlayerNode()
   private var timerAudioActive = false
@@ -208,8 +208,8 @@ struct SiftActivityAttributes: ActivityAttributes {
   private func startTimerAudio() {
     timerAudioActive = true
     guard !audioEngine.isRunning else { return }
-    // Build a 0.5s silent buffer and loop it — keeps app alive in background
-    // so Timer.periodic keeps firing and the alarm can play even on silent
+    // Build a 0.5s silent buffer and loop it as a best-effort continuity aid.
+    // Reliability comes from pre-scheduled local notifications, not this loop.
     let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
     audioEngine.attach(silentNode)
     audioEngine.connect(silentNode, to: audioEngine.mainMixerNode, format: format)
@@ -318,7 +318,7 @@ struct SiftActivityAttributes: ActivityAttributes {
       do {
         let activity = try Activity.request(
           attributes: attributes,
-          content: .init(state: state, staleDate: nil)
+          content: .init(state: state, staleDate: phaseEndTime)
         )
         self.liveActivityID = activity.id
         result(nil)
@@ -356,7 +356,7 @@ struct SiftActivityAttributes: ActivityAttributes {
 
     Task {
       for activity in Activity<SiftActivityAttributes>.activities where activity.id == id {
-        await activity.update(.init(state: state, staleDate: nil))
+        await activity.update(.init(state: state, staleDate: phaseEndTime))
       }
     }
     result(nil)

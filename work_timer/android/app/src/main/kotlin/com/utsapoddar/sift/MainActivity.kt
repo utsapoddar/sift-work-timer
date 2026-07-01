@@ -76,6 +76,13 @@ class MainActivity : FlutterActivity() {
                     startService(intent)
                     result.success(null)
                 }
+                "isIgnoringBatteryOptimizations" -> {
+                    result.success(isIgnoringBatteryOptimizations())
+                }
+                "openBatteryOptimizationSettings" -> {
+                    openBatteryOptimizationSettings()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -89,24 +96,6 @@ class MainActivity : FlutterActivity() {
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(
                 this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
-        }
-        // Request battery optimization exemption so the timer survives on aggressive OEMs
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.parse("package:$packageName")
-                }
-                // Many OEMs (Samsung, Xiaomi, etc.) don't expose this settings activity.
-                // Guard with resolveActivity + try-catch to avoid launch crashes.
-                if (intent.resolveActivity(packageManager) != null) {
-                    try {
-                        startActivity(intent)
-                    } catch (_: android.content.ActivityNotFoundException) {
-                        // Ignore — user can manually whitelist the app in settings.
-                    }
-                }
-            }
         }
         val filter = IntentFilter().apply {
             addAction(TimerService.ACTION_STOP)
@@ -129,6 +118,34 @@ class MainActivity : FlutterActivity() {
                 unregisterReceiver(actionReceiver)
             } catch (_: IllegalArgumentException) {
                 // Receiver may have already been unregistered.
+            }
+        }
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun openBatteryOptimizationSettings() {
+        val settingsIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        val intent = if (settingsIntent.resolveActivity(packageManager) != null) {
+            settingsIntent
+        } else {
+            fallbackIntent
+        }
+
+        try {
+            startActivity(intent)
+        } catch (_: android.content.ActivityNotFoundException) {
+            try {
+                startActivity(fallbackIntent)
+            } catch (_: android.content.ActivityNotFoundException) {
+                // Ignore — user can manually open app settings.
             }
         }
     }
