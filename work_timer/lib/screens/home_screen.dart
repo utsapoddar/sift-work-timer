@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/schedule.dart';
+import '../services/timer_action_policy.dart';
 import '../services/audio.dart';
 import '../services/battery_optimization.dart' as battery_optimization;
 import '../services/durable_stats.dart';
@@ -77,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen>
           if (action == 'stop') {
             _stop();
           } else if (action == 'silence') {
-            _stopAlarm();
+            _stopAlarm(nativeOrigin: true);
           } else if (action == 'alarm') {
             _tick(); // sync UI with current phase
           }
@@ -565,9 +566,11 @@ class _HomeScreenState extends State<HomeScreen>
     await playAlarm();
   }
 
-  Future<void> _stopAlarm() async {
+  Future<void> _stopAlarm({bool nativeOrigin = false}) async {
     await stopAlarm();
-    await silenceTimerService();
+    if (shouldNotifyNativeWhenStoppingAlarm(nativeOrigin: nativeOrigin)) {
+      await silenceTimerService();
+    }
     if (_sessionComplete) {
       _stop();
     } else {
