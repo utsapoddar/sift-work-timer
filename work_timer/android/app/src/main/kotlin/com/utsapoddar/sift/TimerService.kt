@@ -42,6 +42,7 @@ class TimerService : Service() {
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var vibrator: Vibrator? = null
+    private var alarmGateStartedAt: Long? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -74,6 +75,8 @@ class TimerService : Service() {
         when (intent.action) {
             ACTION_ALARM_FIRED -> {
                 currentPhaseName = intent.getStringExtra(EXTRA_PHASE_NAME) ?: currentPhaseName
+                alarmGateStartedAt = System.currentTimeMillis()
+                cancelAlarms()
                 updateNotification()
                 playAlarm()
                 // Notify Flutter if it's alive
@@ -92,6 +95,7 @@ class TimerService : Service() {
             }
             ACTION_SILENCE -> {
                 stopAlarmSound()
+                resumeAlarmsAfterGate()
                 // Also notify Flutter so the UI can react
                 sendBroadcast(Intent("com.sift.timer.alarm_notify").setPackage(packageName).apply {
                     action = ACTION_SILENCE
@@ -208,6 +212,24 @@ class TimerService : Service() {
         getSharedPreferences("sift_boot", Context.MODE_PRIVATE).edit().clear().apply()
     }
 
+    private fun resumeAlarmsAfterGate() {
+        val gateStartedAt = alarmGateStartedAt ?: return
+        val elapsedMs = (System.currentTimeMillis() - gateStartedAt).coerceAtLeast(0L)
+        val prefs = getSharedPreferences("sift_boot", Context.MODE_PRIVATE)
+        val namesStr = prefs.getString("phase_names", null) ?: return
+        val timesStr = prefs.getString("phase_times", null) ?: return
+        val names = namesStr.split(",").toTypedArray()
+        val shiftedTimes = timesStr.split(",")
+            .mapNotNull { it.toLongOrNull() }
+            .map { if (it > gateStartedAt) it + elapsedMs else it }
+            .toLongArray()
+        if (shiftedTimes.isNotEmpty()) {
+            scheduleAlarms(names, shiftedTimes)
+            savePhaseDataForBoot(names, shiftedTimes)
+        }
+        alarmGateStartedAt = null
+    }
+
     private fun playAlarm() {
         stopAlarmSound()
         requestAlarmAudioFocus()
@@ -253,7 +275,7 @@ class TimerService : Service() {
                 }
             }
             mediaPlayer?.apply {
-                isLooping = false
+                isLooping = true
                 setOnCompletionListener { mp ->
                     if (mediaPlayer == mp) {
                         try { mp.release() } catch (_: Exception) {}

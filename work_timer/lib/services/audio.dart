@@ -18,10 +18,11 @@ void _ensureVibrationStopsOnCompletion() {
   });
 }
 
-Future<void> playAlarm() async {
+Future<void> playAlarm({bool loop = false}) async {
   _ensureVibrationStopsOnCompletion();
   try {
     await _player.stop();
+    await _player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.release);
     stopAlarmVibration();
     if (Platform.isAndroid) {
       await _player.setAudioContext(
@@ -64,5 +65,6 @@ Future<void> stopAlarm() async {
   stopAlarmVibration();
   try {
     await _player.stop();
+    await _player.setReleaseMode(ReleaseMode.release);
   } catch (_) {}
 }

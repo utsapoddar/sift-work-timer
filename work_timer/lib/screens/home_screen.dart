@@ -15,6 +15,7 @@ import '../services/durable_stats.dart';
 import '../services/milestones.dart';
 import '../services/live_activity.dart';
 import '../services/notifications.dart';
+import '../services/phase_alarm_gate.dart';
 import 'milestone_screen.dart';
 
 const _accent = Color(0xFFF97316);
@@ -44,6 +45,9 @@ class _HomeScreenState extends State<HomeScreen>
   int _totalPausedMs = 0;
   bool _alarmPlaying = false;
   bool _sessionComplete = false;
+  bool _waitingForAlarmStop = false;
+  DateTime? _alarmGateStart;
+  int? _pendingPhaseIndexAfterAlarm;
   int _lastPhaseIndex = -1;
   String? _ringtonePath;
   StreamSubscription<void>? _alarmCompleteSub;
@@ -89,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
       if (_sessionComplete) {
         _stop();
-      } else {
+      } else if (!_waitingForAlarmStop) {
         setState(() => _alarmPlaying = false);
       }
     });
@@ -527,6 +531,9 @@ class _HomeScreenState extends State<HomeScreen>
       _pauseStart = null;
       _totalPausedMs = 0;
       _sessionComplete = false;
+      _waitingForAlarmStop = false;
+      _alarmGateStart = null;
+      _pendingPhaseIndexAfterAlarm = null;
       _lastPhaseIndex = -1;
     });
     await _persistActiveSession();
@@ -561,9 +568,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _triggerAlarm() async {
-    setState(() => _alarmPlaying = true);
-    await playAlarm();
+  Future<void> _triggerAlarm({required int pendingPhaseIndex}) async {
+    _ticker?.cancel();
+    _ticker = null;
+    setState(() {
+      _waitingForAlarmStop = true;
+      _alarmGateStart = DateTime.now();
+      _pendingPhaseIndexAfterAlarm = pendingPhaseIndex;
+      _alarmPlaying = true;
+    });
+    unawaited(_persistActiveSession());
+    await playAlarm(loop: true);
   }
 
   Future<void> _stopAlarm({bool nativeOrigin = false}) async {
@@ -573,9 +588,56 @@ class _HomeScreenState extends State<HomeScreen>
     }
     if (_sessionComplete) {
       _stop();
-    } else {
-      setState(() => _alarmPlaying = false);
+      return;
     }
+
+    final schedule = _schedule;
+    final gateStart = _alarmGateStart;
+    final pendingPhaseIndex = _pendingPhaseIndexAfterAlarm;
+    if (_waitingForAlarmStop &&
+        schedule != null &&
+        gateStart != null &&
+        pendingPhaseIndex != null &&
+        pendingPhaseIndex < schedule.phases.length) {
+      final resolved = resolvePhaseAlarmGate(
+        totalPausedMs: _totalPausedMs,
+        gateStartedAt: gateStart,
+        stoppedAt: DateTime.now(),
+        pendingPhaseIndex: pendingPhaseIndex,
+      );
+      _totalPausedMs = resolved.totalPausedMs;
+      _lastPhaseIndex = resolved.activePhaseIndex;
+      final now = DateTime.now().subtract(
+        Duration(milliseconds: _totalPausedMs),
+      );
+      final phase = schedule.phases[resolved.activePhaseIndex];
+      setState(() {
+        _waitingForAlarmStop = false;
+        _alarmGateStart = null;
+        _pendingPhaseIndexAfterAlarm = null;
+        _alarmPlaying = false;
+        _phaseIndex = resolved.activePhaseIndex;
+        _remaining = phase.remaining(now);
+        _phaseProgress = phase.progress(now);
+      });
+      unawaited(_persistActiveSession());
+      unawaited(scheduleAll(schedule, offsetMs: _totalPausedMs));
+      unawaited(
+        startTimerService(
+          phaseNames: schedule.phases.map((p) => p.phase.name).toList(),
+          phaseEndTimes: shiftedPhaseEndTimes(schedule, _totalPausedMs),
+        ),
+      );
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+      return;
+    }
+
+    setState(() {
+      _waitingForAlarmStop = false;
+      _alarmGateStart = null;
+      _pendingPhaseIndexAfterAlarm = null;
+      _alarmPlaying = false;
+    });
   }
 
   void _stop() async {
@@ -599,6 +661,9 @@ class _HomeScreenState extends State<HomeScreen>
       _pauseStart = null;
       _totalPausedMs = 0;
       _alarmPlaying = false;
+      _waitingForAlarmStop = false;
+      _alarmGateStart = null;
+      _pendingPhaseIndexAfterAlarm = null;
       _sessionComplete = false;
       _pendingMilestone = null;
       _phaseIndex = 0;
@@ -688,7 +753,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _tick() {
     final schedule = _schedule;
-    if (schedule == null) return;
+    if (schedule == null || _waitingForAlarmStop) return;
 
     final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
     final idx = schedule.currentPhaseIndex(now);
@@ -699,7 +764,7 @@ class _HomeScreenState extends State<HomeScreen>
       unawaited(_onSessionComplete());
       setState(() => _sessionComplete = true);
       unawaited(cancelNotification(schedule.phases.length - 1));
-      _triggerAlarm();
+      _triggerAlarm(pendingPhaseIndex: schedule.phases.length);
       return;
     }
 
@@ -708,18 +773,24 @@ class _HomeScreenState extends State<HomeScreen>
     final progress = phase.progress(now);
 
     if (idx != _lastPhaseIndex && _lastPhaseIndex != -1) {
-      // Cancel the notification for the completed phase — app handles alarm in-app
+      final completedPhase = schedule.phases[_lastPhaseIndex];
       unawaited(cancelNotification(_lastPhaseIndex));
-      _triggerAlarm();
+      setState(() {
+        _phaseIndex = _lastPhaseIndex;
+        _remaining = Duration.zero;
+        _phaseProgress = 1.0;
+      });
       updateLiveActivity(
-        phaseName: phase.phase.name,
-        phaseEndTime: phase.endTime,
-        remainingSeconds: remaining.inSeconds,
-        totalSeconds: phase.phase.duration.inSeconds,
-        isBreak: phase.phase.isBreak,
+        phaseName: completedPhase.phase.name,
+        phaseEndTime: completedPhase.endTime,
+        remainingSeconds: 0,
+        totalSeconds: completedPhase.phase.duration.inSeconds,
+        isBreak: completedPhase.phase.isBreak,
         isPaused: false,
-        alarmPlaying: _alarmPlaying,
+        alarmPlaying: true,
       );
+      _triggerAlarm(pendingPhaseIndex: idx);
+      return;
     }
     _lastPhaseIndex = idx;
 
