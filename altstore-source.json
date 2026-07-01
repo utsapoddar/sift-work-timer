@@ -5,7 +5,7 @@
   "apps": [
     {
       "name": "Sift",
-      "bundleIdentifier": "com.example.workTimer",
+      "bundleIdentifier": "com.utsapoddar.sift",
       "developerName": "Utsa Poddar",
       "subtitle": "Work session timer with automatic breaks",
       "version": "1.0.12",
