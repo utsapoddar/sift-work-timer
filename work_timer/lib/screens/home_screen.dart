@@ -16,6 +16,7 @@ import '../services/milestones.dart';
 import '../services/live_activity.dart';
 import '../services/notifications.dart';
 import '../services/phase_alarm_gate.dart';
+import '../services/pause_clock.dart';
 import 'milestone_screen.dart';
 
 const _accent = Color(0xFFF97316);
@@ -507,7 +508,12 @@ class _HomeScreenState extends State<HomeScreen>
   void _scheduleBackgroundWakeup() {
     final schedule = _schedule;
     if (schedule == null) return;
-    final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
+    final now = scheduleNow(
+      wallNow: DateTime.now(),
+      totalPausedMs: _totalPausedMs,
+      isPaused: _paused,
+      pauseStart: _pauseStart,
+    );
     final idx = schedule.currentPhaseIndex(now);
     if (idx >= schedule.phases.length) return;
     // Wall-clock moment this phase ends (accounts for any paused time)
@@ -726,7 +732,7 @@ class _HomeScreenState extends State<HomeScreen>
       final phase = schedule.phases[_phaseIndex];
       updateLiveActivity(
         phaseName: phase.phase.name,
-        phaseEndTime: phase.endTime,
+        phaseEndTime: DateTime.now().add(_remaining),
         remainingSeconds: _remaining.inSeconds,
         totalSeconds: phase.phase.duration.inSeconds,
         isBreak: phase.phase.isBreak,
@@ -762,7 +768,7 @@ class _HomeScreenState extends State<HomeScreen>
       final phase = schedule.phases[_phaseIndex];
       updateLiveActivity(
         phaseName: phase.phase.name,
-        phaseEndTime: phase.endTime,
+        phaseEndTime: phase.endTime.add(Duration(milliseconds: _totalPausedMs)),
         remainingSeconds: _remaining.inSeconds,
         totalSeconds: phase.phase.duration.inSeconds,
         isBreak: phase.phase.isBreak,
@@ -774,9 +780,14 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _tick() {
     final schedule = _schedule;
-    if (schedule == null || _waitingForAlarmStop) return;
+    if (schedule == null || _waitingForAlarmStop || _paused) return;
 
-    final now = DateTime.now().subtract(Duration(milliseconds: _totalPausedMs));
+    final now = scheduleNow(
+      wallNow: DateTime.now(),
+      totalPausedMs: _totalPausedMs,
+      isPaused: _paused,
+      pauseStart: _pauseStart,
+    );
     final idx = schedule.currentPhaseIndex(now);
 
     if (idx >= schedule.phases.length) {

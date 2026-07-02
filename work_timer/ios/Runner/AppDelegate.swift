@@ -356,9 +356,11 @@ struct SiftActivityAttributes: ActivityAttributes {
       alarmPlaying: alarmPlaying
     )
 
+    let staleDate: Date? = (isPaused || alarmPlaying) ? nil : phaseEndTime
+
     Task {
       for activity in Activity<SiftActivityAttributes>.activities where activity.id == id {
-        await activity.update(.init(state: state, staleDate: phaseEndTime))
+        await activity.update(.init(state: state, staleDate: staleDate))
       }
     }
     result(nil)
