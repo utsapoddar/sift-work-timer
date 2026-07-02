@@ -164,6 +164,8 @@ struct SiftActivityAttributes: ActivityAttributes {
       case "stopTimerAudio":
         self.stopTimerAudio()
         result(nil)
+      case "getOutputVolume":
+        result(Double(AVAudioSession.sharedInstance().outputVolume))
       default:
         if #available(iOS 16.2, *) {
           switch call.method {

@@ -58,6 +58,17 @@ Future<void> endLiveActivity() async {
   } catch (_) {}
 }
 
+/// Current iOS output volume, 0.0 to 1.0. Null on non-iOS or failure.
+Future<double?> getOutputVolume() async {
+  if (!Platform.isIOS) return null;
+  try {
+    final value = await _channel.invokeMethod<double>('getOutputVolume');
+    return value;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Start silent background audio loop — keeps app alive so alarm fires even on silent.
 Future<void> startTimerAudio() async {
   if (!Platform.isIOS) return;

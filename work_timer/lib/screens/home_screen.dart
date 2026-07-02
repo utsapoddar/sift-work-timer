@@ -46,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _alarmPlaying = false;
   bool _sessionComplete = false;
   bool _waitingForAlarmStop = false;
+  bool _lowVolumeWarningShownForAlarm = false;
   DateTime? _alarmGateStart;
   int? _pendingPhaseIndexAfterAlarm;
   int _lastPhaseIndex = -1;
@@ -532,6 +533,7 @@ class _HomeScreenState extends State<HomeScreen>
       _totalPausedMs = 0;
       _sessionComplete = false;
       _waitingForAlarmStop = false;
+      _lowVolumeWarningShownForAlarm = false;
       _alarmGateStart = null;
       _pendingPhaseIndexAfterAlarm = null;
       _lastPhaseIndex = -1;
@@ -578,7 +580,23 @@ class _HomeScreenState extends State<HomeScreen>
       _alarmPlaying = true;
     });
     unawaited(_persistActiveSession());
+    await _maybeWarnLowAlarmVolume();
     await playAlarm(loop: true);
+  }
+
+  Future<void> _maybeWarnLowAlarmVolume() async {
+    if (_lowVolumeWarningShownForAlarm) return;
+    final volume = await getOutputVolume();
+    if (!mounted || volume == null || volume >= 0.25) return;
+    _lowVolumeWarningShownForAlarm = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'iPhone volume is low — Sift cannot override media volume, so the alarm may be quiet.',
+        ),
+        duration: Duration(seconds: 6),
+      ),
+    );
   }
 
   Future<void> _stopAlarm({bool nativeOrigin = false}) async {
@@ -613,6 +631,7 @@ class _HomeScreenState extends State<HomeScreen>
       final phase = schedule.phases[resolved.activePhaseIndex];
       setState(() {
         _waitingForAlarmStop = false;
+        _lowVolumeWarningShownForAlarm = false;
         _alarmGateStart = null;
         _pendingPhaseIndexAfterAlarm = null;
         _alarmPlaying = false;
@@ -634,6 +653,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     setState(() {
       _waitingForAlarmStop = false;
+      _lowVolumeWarningShownForAlarm = false;
       _alarmGateStart = null;
       _pendingPhaseIndexAfterAlarm = null;
       _alarmPlaying = false;
@@ -662,6 +682,7 @@ class _HomeScreenState extends State<HomeScreen>
       _totalPausedMs = 0;
       _alarmPlaying = false;
       _waitingForAlarmStop = false;
+      _lowVolumeWarningShownForAlarm = false;
       _alarmGateStart = null;
       _pendingPhaseIndexAfterAlarm = null;
       _sessionComplete = false;
