@@ -136,7 +136,7 @@ Future<void> scheduleAll(Schedule schedule, {int offsetMs = 0}) async {
       ),
     );
 
-    final burstCount = Platform.isIOS && isLast ? _completionBurstCount : 1;
+    final burstCount = Platform.isIOS ? _completionBurstCount : 1;
     for (int burstIndex = 0; burstIndex < burstCount; burstIndex++) {
       final adjustedEnd = phase.endTime.add(
         Duration(
