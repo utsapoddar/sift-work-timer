@@ -6,14 +6,33 @@ import WidgetKit
 private let accent = Color(red: 0.976, green: 0.451, blue: 0.086)
 private let surface = Color(red: 0.078, green: 0.078, blue: 0.078)
 
-struct SiftLockScreenView: View {
-    let context: ActivityViewContext<SiftActivityAttributes>
+struct SiftProgressLine: View {
+    let state: SiftActivityAttributes.ContentState
 
     var progress: Double {
-        guard context.state.totalSeconds > 0 else { return 0 }
-        let elapsed = Double(context.state.totalSeconds - context.state.remainingSeconds)
-        return min(elapsed / Double(context.state.totalSeconds), 1.0)
+        guard state.totalSeconds > 0 else { return 0 }
+        let elapsed = Double(state.totalSeconds - state.remainingSeconds)
+        return min(max(elapsed / Double(state.totalSeconds), 0), 1.0)
     }
+
+    var phaseTimeRange: ClosedRange<Date> {
+        let duration = TimeInterval(max(state.totalSeconds, 1))
+        return state.phaseEndTime.addingTimeInterval(-duration)...state.phaseEndTime
+    }
+
+    var body: some View {
+        if state.isPaused || state.alarmPlaying {
+            ProgressView(value: progress)
+                .progressViewStyle(LinearProgressViewStyle(tint: accent))
+        } else {
+            ProgressView(timerInterval: phaseTimeRange, countsDown: false)
+                .progressViewStyle(LinearProgressViewStyle(tint: accent))
+        }
+    }
+}
+
+struct SiftLockScreenView: View {
+    let context: ActivityViewContext<SiftActivityAttributes>
 
     var body: some View {
         VStack(spacing: 10) {
@@ -40,17 +59,10 @@ struct SiftLockScreenView: View {
                 }
 
                 Spacer()
-
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 5)
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                }
-                .frame(width: 44, height: 44)
             }
+
+            SiftProgressLine(state: context.state)
+                .tint(accent)
 
             HStack(spacing: 12) {
                 if context.state.alarmPlaying {
@@ -112,25 +124,9 @@ struct SiftWidgetLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.white.opacity(0.1))
-                                    .frame(height: 4)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(accent)
-                                    .frame(
-                                        width: geo.size.width * min(
-                                            Double(context.state.totalSeconds - context.state.remainingSeconds) /
-                                            max(Double(context.state.totalSeconds), 1),
-                                            1.0
-                                        ),
-                                        height: 4
-                                    )
-                            }
-                        }
-                        .frame(height: 4)
-                        .padding(.horizontal, 4)
+                        SiftProgressLine(state: context.state)
+                            .tint(accent)
+                            .padding(.horizontal, 4)
 
                         HStack(spacing: 10) {
                             if context.state.alarmPlaying {

@@ -2,7 +2,7 @@ name: work_timer
 description: "Work session timer with automatic break scheduling."
 publish_to: 'none'
 
-version: 1.0.16+16
+version: 1.0.17+17
 environment:
   sdk: ^3.11.3
 
